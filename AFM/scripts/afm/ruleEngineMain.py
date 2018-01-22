@@ -13,7 +13,7 @@ class RuleEngineMain(object):
         # self._silo_server_name = silo_server_name
         self._silo_type = silo_type
         self._context = self._getting_context()
-        self._run_rule_engine = RunRuleEngine(self._dw_connection, self._context)
+        self._run_rule_engine = RunRuleEngine(self._dw_connection, self._app_connection, self._context)
 
     def _getting_retailer_name(self):
         sql = "SELECT retailer_sname FROM rsi_dim_retailer WHERE retailer_key = {RETAILER_KEY}"\

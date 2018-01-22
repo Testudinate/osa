@@ -1,8 +1,9 @@
 
 class GetSQLSubLevelFilter(object):
 
-    def __init__(self, conn, context):
+    def __init__(self, conn, app_conn, context):
         self._dw_connection = conn
+        self._app_connection = app_conn
         self._context = context
         self._schema_name = context["SCHEMA_NAME"]
         self._suffix = "_" + context["SUFFIX"]
@@ -49,11 +50,11 @@ class GetSQLSubLevelFilter(object):
             loop_times += 1
         print("Returned SQL is: ", _sqlToReturn)
 
-        sql = "SELECT /*+label(GX_OSM_RULE_ENGINE)*/ * FROM {schemaName}.ANL_RULE_ENGINE_STAGE_RULES{suffix} " \
+        sql = "SELECT /*+label(GX_OSM_RULE_ENGINE)*/ * FROM #TMP_ANL_RULE_ENGINE_STAGE_RULES " \
               "WHERE rule_id={ruleId} AND rule_set_id={ruleSetID}"\
-            .format(schemaName=self._schema_name, ruleId=rule_id, ruleSetID=rule_set_id, suffix=self._suffix)
+            .format(ruleId=rule_id, ruleSetID=rule_set_id, suffix=self._suffix)
         print(sql)
-        row = self._dw_connection.query_with_result(sql)[0]
+        row = self._app_connection.query_with_result(sql)[0]
         # print(row, type(row))
         print("before :", condition)
         _new_condition = condition.lower().replace("parameter1", str(row['PARAMETER1']))

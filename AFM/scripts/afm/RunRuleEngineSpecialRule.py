@@ -10,9 +10,10 @@ from removeDuplication import *
 
 
 class RunRuleEngineSpecialRule(object):
-    def __init__(self, conn, context):
+    def __init__(self, conn, app_conn, context):
         # self._dw_connection = dbo.DWAccess()
         self._dw_connection = conn
+        self._app_connection = app_conn
         self._context = context
         self._schema_name = context["SCHEMA_NAME"]
         self._suffix = "_" + context["SUFFIX"]
@@ -20,7 +21,7 @@ class RunRuleEngineSpecialRule(object):
         # self._hub_id = hub_id
         self._run_feedback = None
         self._remove_duplication = RemoveDuplication(self._dw_connection, self._context)
-        self._get_sub_level_filter = GetSQLSubLevelFilter(self._dw_connection, self._context)
+        self._get_sub_level_filter = GetSQLSubLevelFilter(self._dw_connection, self._app_connection, self._context)
         self._update_target = UpdateTargetTable(self._dw_connection,self._context)
 
     def special_rule_processing(self, rule_set_id, rule_id, provider_sub_type, intervention_key_list):
@@ -56,35 +57,34 @@ class RunRuleEngineSpecialRule(object):
               "CASE WHEN parameter2 IS NULL THEN '' ELSE parameter2 END AS parameter2, " \
               "CASE WHEN parameter3 IS NULL THEN '' ELSE parameter3 END AS parameter3, " \
               "CASE WHEN SUB_LEVEL_METRICS IS NULL THEN '' ELSE SUB_LEVEL_METRICS END AS SUB_LEVEL_METRICS_new " \
-              "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_RULES{suffix} WHERE rule_set_id = {ruleSetId} AND rule_id = {ruleID}" \
-            .format(schemaName=self._schema_name, ruleSetId=rule_set_id, ruleID=rule_id, suffix=self._suffix)
-        _rule_row = self._dw_connection.query_with_result(sql)[0]
+              "FROM #TMP_ANL_RULE_ENGINE_STAGE_RULES WHERE rule_set_id = {ruleSetId} AND rule_id = {ruleID}" \
+            .format(ruleSetId=rule_set_id, ruleID=rule_id, suffix=self._suffix)
+        _rule_row = self._app_connection.query_with_result(sql)[0]
         print(_rule_row, type(_rule_row))
         _parameter1 = _rule_row['PARAMETER1']
         _parameter2 = _rule_row['PARAMETER2']
         _parameter3 = _rule_row['PARAMETER3']
         _sub_level_metrics = _rule_row['SUB_LEVEL_METRICS_NEW']
 
-        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ * FROM {schemaName}.ANL_RULE_ENGINE_META_RULES " \
-              "WHERE rule_id = {ruleID}".format(schemaName=self._schema_name, ruleID=rule_id)
-        _meta_rule_row = self._dw_connection.query_with_result(sql)[0]
+        sql = "SELECT * FROM ANL_RULE_ENGINE_META_RULES " \
+              "WHERE rule_id = {ruleID}".format(ruleID=rule_id)
+        _meta_rule_row = self._app_connection.query_with_result(sql)[0]
         # print(_meta_rule_row, type(_meta_rule_row))
         _metrics_type = _meta_rule_row['METRICS_TYPE']
         _metrics_name = _meta_rule_row['METRICS_NAME']
         _metrics_reject_reason = _meta_rule_row['METRICS_REJECT_REASON']
         _filter_name = _meta_rule_row['FILTER_NAME']
 
-        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ * FROM {schemaName}.ANL_RULE_ENGINE_RULE_SET " \
-              "WHERE RULE_SET_ID = {ruleSetId}".format(schemaName=self._schema_name, ruleSetId=rule_set_id)
-        _rule_set_rows = self._dw_connection.query_with_result(sql)[0]
+        sql = "SELECT * FROM ANL_RULE_ENGINE_RULE_SET " \
+              "WHERE RULE_SET_ID = {ruleSetId}".format(ruleSetId=rule_set_id)
+        _rule_set_rows = self._app_connection.query_with_result(sql)[0]
         # print(_rule_set_rows, type(_rule_set_rows))
         # _silo_id = _rule_set_rows['SILO_ID']
         _data_provider_name = _rule_set_rows['DATA_PROVIDER_NAME']
 
-        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ * FROM {schemaName}.ANL_RULE_ENGINE_META_DATA_PROVIDERS " \
-              "WHERE data_provider_name = '{dataProviderName}'".format(schemaName=self._schema_name,
-                                                                       dataProviderName=_data_provider_name)
-        _provider_row = self._dw_connection.query_with_result(sql)[0]
+        sql = "SELECT * FROM ANL_RULE_ENGINE_META_DATA_PROVIDERS " \
+              "WHERE data_provider_name = '{dataProviderName}'".format(dataProviderName=_data_provider_name)
+        _provider_row = self._app_connection.query_with_result(sql)[0]
         # print(_provider_row, type(_provider_row))
         _provider_pk_column = _provider_row['PROVIDER_BASE_TABLE_PK_COLUMN']
 
@@ -105,6 +105,8 @@ class RunRuleEngineSpecialRule(object):
         if (_metrics_type.lower() == 'Product Filter'.lower() or _metrics_type.lower() == 'Store Filter'.lower()
             or _metrics_type.lower() == 'Store-Product Filter'.lower() or _metrics_type.lower() == 'Feedback'.lower()):
             _file_id = _parameter1
+            _join_column = ''
+            _in_not_in = ''
             self._dw_connection.execute("DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP")
             if _metrics_type.lower() == "Product Filter".lower():
                 _join_column = 'UPC'
@@ -122,7 +124,7 @@ class RunRuleEngineSpecialRule(object):
                 _join_column = "CAST(vendor_key AS VARCHAR(20)) ||'-' || CAST(retailer_key AS VARCHAR(20)) || '-' ||storeid || '-' || upc || '-' || COALESCE(sublevel.SUB_LEVEL_VALUE,'default')"
                 # Run-Feedback $verticaConn $sqlConn $hubConn {schemaName} $hubID -inaccurateAlertsDys $parameter1
                 # -notInPlanogramDays $parameter2 -trueAlertDays $parameter3 -ruleSetId {ruleSetId} -ruleID $ruleID -siloID $siloID
-                self._run_feedback = RunFeedback(self._dw_connection, self._context, _parameter1,
+                self._run_feedback = RunFeedback(self._dw_connection, self._app_connection, self._context, _parameter1,
                                                  _parameter2, _parameter3, rule_set_id, rule_id)
                 self._run_feedback.processing_feedback()
                 sql = "INSERT /*+ DIRECT, label(GX_OSM_RULE_ENGINE)*/ INTO {schemaName}.ANL_RULE_ENGINE_STAGE_RULE_LIST " \
@@ -165,6 +167,9 @@ class RunRuleEngineSpecialRule(object):
         # _metrics_type = 'Flagged Item'
         # _parameter1 = 10
         if (_metrics_type.lower() == 'Flagged Item'.lower()) or (_metrics_type.lower() == 'Flagged Store'.lower()):
+            _aggregate_column = ''
+            _sub_aggregate_column = ''
+            flag_intervention_key_list = ''
             if _metrics_type.lower() == 'Flagged Item'.lower():
                 _aggregate_column = 'STOREID'
                 _sub_aggregate_column = 'UPC'

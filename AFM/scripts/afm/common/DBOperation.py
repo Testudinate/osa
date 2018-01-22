@@ -8,7 +8,7 @@ class DWAccess(object):
         self._host = 'QAVERTICANXG.ENG.RSICORP.LOCAL'
         self._port = 5433
         self._user = 'ben.wu'
-        self._pwd = 'Bat.Pit.Pan-333'
+        self._pwd = 'Bat.Pit.Pan-444'
         self._db = 'fusion'
         self._dw_conn = py.connect("DRIVER={{Vertica}};SERVER={0};DATABASE={1};UID={2};PWD={3}".format(self._host, self._db, self._user, self._pwd))
 
@@ -74,11 +74,11 @@ class DWAccess(object):
 
 class APPAccess(object):
     def __init__(self):
-        self._host = r'10.172.36.31\rv2'
+        self._host = r'10.172.36.31\RV2'
         self._port = 1433
         self._user_name = 'ben.wu'
         self._pwd = '!QAZ2wsx'
-        self._db_name = 'OSA'
+        self._db_name = 'OSA_AHOLD_BEN'
         self._app_conn = py.connect("DRIVER={{SQL Server}}; SERVER={0}; DATABASE={1}; UID={2}; PWD={3}".
                                            format(self._host, self._db_name,
                                                   self._user_name, self._pwd))

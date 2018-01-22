@@ -2,8 +2,9 @@
 class RunFeedback(object):
 # param($verticaConn,$sqlConn,$hubConn,$schemaName,$hubID,$inaccurateAlertsDys,$notInPlanogramDays,$trueAlertDays,$ruleSetId,$ruleID,$siloID='')
 # param($verticaConn,$sqlConn,$hubConn,$schemaName,$hubID,$inaccurateAlertsDys,$notInPlanogramDays,$trueAlertDays,$ruleSetId,$ruleID,$siloID)
-    def __init__(self, conn, context, inaccurate_alerts_dys, not_in_planogram_days, true_alert_days, rule_set_id, rule_id):
+    def __init__(self, conn, app_conn, context, inaccurate_alerts_dys, not_in_planogram_days, true_alert_days, rule_set_id, rule_id):
         self.dw_connection = conn
+        self.app_connection = app_conn
         self._context = context
         self._schema_name = context["SCHEMA_NAME"]
         self._suffix = "_" + context["SUFFIX"]
@@ -66,12 +67,12 @@ class RunFeedback(object):
                                                                        suffix=self._suffix)
         self.dw_connection.execute(sql)
 
-        sql="SELECT /*+label(GX_OSM_RULE_ENGINE)*/ COUNT(*) FROM {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER " \
+        sql="SELECT COUNT(*) FROM ANL_RULE_ENGINE_SUB_LEVEL_FILTER " \
             "WHERE rule_set_Id = {ruleSetId} AND rule_ID = {ruleID} and SUB_LEVEL_VALUE IS NOT NULL " \
             "AND SUB_LEVEL_CATEGORY = 'Alert Type';".format(schemaName=self._schema_name,
                                                             ruleSetId=self._rule_set_id,
                                                             ruleID=self._rule_id)
-        _alert_type_enabled = self.dw_connection.query_scalar(sql)[0]
+        _alert_type_enabled = self.app_connection.query_scalar(sql)[0]
         if _alert_type_enabled != 0:
             sqlForFeedback = \
                 "SELECT fdbk.Store_Id, fdbk.vendor_key, fdbk.Inner_UPC, fdbk.STORE_VISIT_DATE, " \

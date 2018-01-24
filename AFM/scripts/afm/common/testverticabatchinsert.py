@@ -92,14 +92,14 @@ dw_conn_sa = sa.create_engine('vertica+pyodbc://@mydsn')
 # dw_conn_sa = sa.create_engine(sa.engine.url.URL(
 #     drivername='vertica+pyodbc',
 #     username='ben.wu',
-#     password='Bat.Pit.Pan-444',
+#     password='****',
 #     host='QAVERTICANXG.ENG.RSICORP.LOCAL',
 #     database='fusion',
 # ))
 
 # below part is working fine. it is slow in local PC, but it is much faster in VM.
 sql = 'select VENDOR_KEY, VENDOR_NAME, VENDOR_SNAME from OSA_AHOLD_BEN.rsi_dim_vendor'
-# dw_conn_sa = sa.create_engine("vertica+vertica_python://ben.wu:Bat.Pit.Pan-444@QAVERTICANXG.ENG.RSICORP.LOCAL:5432/fusion")
+# dw_conn_sa = sa.create_engine("vertica+vertica_python://ben.wu:****@QAVERTICANXG.ENG.RSICORP.LOCAL:5432/fusion")
 df = pd.read_sql(sql, dw_conn_sa)
 # print(type(df), df)
 # df.to_sql('RSI_DIM_VENDOR_copy', dw_conn_sa, schema='OSA_AHOLD_BEN', if_exists='append', index=False, chunksize=1000)
@@ -147,7 +147,7 @@ import vertica_python
 conn_info = {'host': 'QAVERTICANXG.ENG.RSICORP.LOCAL',
 'port': 5433,
 'user': 'ben.wu',
-'password': 'Bat.Pit.Pan-444',
+'password': '****',
 'database': 'fusion'}
 connection = vertica_python.connect(**conn_info)
 cur = connection.cursor()

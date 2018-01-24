@@ -1,7 +1,7 @@
 from RunRuleEngine import RunRuleEngine
 from common.DBOperation import DWAccess
 from common.DBOperation import APPAccess
-
+from SyncTable import SyncTable
 
 class RuleEngineMain(object):
     def __init__(self, vendor_key, retailer_key, silo_type):
@@ -13,6 +13,7 @@ class RuleEngineMain(object):
         # self._silo_server_name = silo_server_name
         self._silo_type = silo_type
         self._context = self._getting_context()
+        self._sync_data = SyncTable(self._app_connection, self._dw_connection, self._context)
         self._run_rule_engine = RunRuleEngine(self._dw_connection, self._app_connection, self._context)
 
     def _getting_retailer_name(self):
@@ -45,6 +46,8 @@ class RuleEngineMain(object):
         return _context
 
     def main_process(self):
+        self._sync_data.sync_table('ANL_RULE_ENGINE_SUB_LEVEL_FILTER','ANL_RULE_ENGINE_SUB_LEVEL_FILTER_55')
+        self._sync_data.sync_table('ANL_RULE_ENGINE_UPC_STORE_LIST','ANL_RULE_ENGINE_UPC_STORE_LIST_55')
         self._run_rule_engine.rule_process()
 
 if __name__ == '__main__':

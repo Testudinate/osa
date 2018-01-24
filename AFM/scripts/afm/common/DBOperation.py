@@ -10,7 +10,11 @@ class DWAccess(object):
         self._user = 'ben.wu'
         self._pwd = 'Bat.Pit.Pan-444'
         self._db = 'fusion'
-        self._dw_conn = py.connect("DRIVER={{Vertica}};SERVER={0};DATABASE={1};UID={2};PWD={3}".format(self._host, self._db, self._user, self._pwd))
+        self._dw_conn = self.get_connection()
+
+    def get_connection(self):
+        return py.connect("DRIVER={{Vertica}};SERVER={0};DATABASE={1};UID={2};PWD={3}"
+                          .format(self._host, self._db, self._user, self._pwd))
 
     def query_with_result(self, sql):
         # conn = self.get_connection()
@@ -80,9 +84,12 @@ class APPAccess(object):
         self._user_name = 'ben.wu'
         self._pwd = '!QAZ2wsx'
         self._db_name = 'OSA_AHOLD_BEN'
-        self._app_conn = py.connect("DRIVER={{SQL Server}}; SERVER={0}; DATABASE={1}; UID={2}; PWD={3}".
-                                           format(self._host, self._db_name,
-                                                  self._user_name, self._pwd))
+        self._app_conn = self.get_connection()
+
+    def get_connection(self):
+        return py.connect("DRIVER={{SQL Server}}; SERVER={0}; DATABASE={1}; UID={2}; PWD={3}"
+                          .format(self._host, self._db_name,
+                                  self._user_name, self._pwd))
 
     def query_with_result(self, sql):
         # conn = self.get_connection()

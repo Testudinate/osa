@@ -8,7 +8,7 @@ class DWAccess(object):
         self._host = 'QAVERTICANXG.ENG.RSICORP.LOCAL'
         self._port = 5433
         self._user = 'ben.wu'
-        self._pwd = 'Bat.Pit.Pan-444'
+        self._pwd = '***'
         self._db = 'fusion'
         self._dw_conn = self.get_connection()
 
@@ -82,7 +82,7 @@ class APPAccess(object):
         self._host = r'10.172.36.31\RV2'
         self._port = 1433
         self._user_name = 'ben.wu'
-        self._pwd = '!QAZ2wsx'
+        self._pwd = '!QAZ2wsx#EDDC'
         self._db_name = 'OSA_AHOLD_BEN'
         self._app_conn = self.get_connection()
 

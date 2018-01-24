@@ -24,6 +24,7 @@ class DWAccess(object):
             results = []
             for row in rows:
                 # results.append(OrderedDict(zip(columns, row)))
+                # yield dict(zip(columns, row))
                 results.append(dict(zip(columns, row)))
             return results
         except py.ProgrammingError as e:

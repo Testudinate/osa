@@ -70,24 +70,28 @@ class UpdateAlertTable(object):
             .format(tableName=_target_table_name, schemaName=self._schema_name)
         _table_exists = self._dw_connection.query_scalar(sql)[0]
 
-        sql = "SELECT COUNT(*) cnt FROM ANL_RULE_ENGINE_STAGE_META_ALERTS_SET WHERE vendor_key={vendorKey}"\
+        sql = "SELECT COUNT(*) cnt FROM ANL_META_RAW_ALERTS_SEQ WHERE vendor_key={vendorKey}"\
             .format(vendorKey=self._vendor_key)
         # _meta_exists=self._dw_connection.query_scalar(sql)[0]
 
         # if _table_exists == 1 and _meta_exists != 0:
+        # TODO : same as next TODO list
+        # BUG :
         if _table_exists == 1:
-            sql = "SELECT * FROM ANL_RULE_ENGINE_STAGE_META_ALERTS_SET WHERE vendor_key={vendorKey}"\
-                .format(vendorKey=self._vendor_key)
-            _alert_set = self._dw_connection.query_with_result(sql)[0]
-            _seq_num = _alert_set['SEQ_NUM']
-            _retailer_key = _alert_set['RETAILER_KEY']
-            _period_key = _alert_set['ALERT_DAY_KEY']
+            pass
+            # sql = "SELECT * FROM ANL_META_RAW_ALERTS_SEQ WHERE vendor_key={vendor_key} and retailer_key = {retailer_key}"\
+            #     .format(vendorKey=self._vendor_key)
+            # _alert_set = self._app_connection.query_with_result(sql)[0]
+            # _seq_num = _alert_set['SEQ_NUM']
+            # _retailer_key = _alert_set['RETAILER_KEY']
+            # _period_key = _alert_set['ALERT_DAY_KEY']
         _seq_num = 1
         _retailer_key = 267
         _period_key = 20170801
 
         print(_seq_num, _retailer_key, _period_key)
 
+        # TODO : to confirm below Forced logic
         # forcedBackupTable = "${tableName}_back_raw_alert"
         #  if ($vendorKey -eq 5088){
         # 	$sql="select count(*) From INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA='dbo' and TABLE_NAME='$forcedBackupTable'"
@@ -105,7 +109,8 @@ class UpdateAlertTable(object):
         # sql="SELECT /*+ label(GX_OSM_AFM) */ * from $schemaName.$tableName where period_key=$periodKey and seq_num=$seqNum and InterventionKey<>1"
         # NXG-17438 : move above time-consuming update out to step11 in PublishAlert job. and change $sql as below.
         # NXG-18098: only sync alerts where issuanceid = 0
-        sql = """insert into {schemaName}.{target_table}
+        # TODO : we won't get data from source table directly if there is already a staging table. will verify.
+        sql = """INSERT INTO {schemaName}.{target_table}
             SELECT /*+ label(gx_osm_afm) */ {target_table_columns}
             FROM {schemaName}.ANL_FACT_OSM_INCIDENTS i
             LEFT JOIN {schemaName}.anl_rule_engine_stage_fact_target_final{suffix} ft

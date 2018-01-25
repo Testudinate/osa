@@ -5,7 +5,7 @@ class GetInterventionKeyList(object):
         self._dw_connection = conn
         # self._dw_connection = DWAccess()
         self._context = context
-        self._schema_name = context["SCHEMA_NAME"]
+        self._schema_name = self._context["SCHEMA_NAME"]
 
     def getting_intervention_key_list(self, type_list):
         """
@@ -19,14 +19,14 @@ class GetInterventionKeyList(object):
 
     def __process(self, type_list):
         print("\n-------------- Calling GetInterventionKeyList function --------------")
-        # self._type_list = '*'
         print(type_list, type(type_list))
         _in_type_list = ','.join("\'" + ele + "\'" for ele in type_list.split(','))
         # print(_in_type_list)
 
         # if _type_list = '*', then retrieving all intervention keys.
         if type_list == '*':
-            sql = "SELECT interventionkey FROM {SCHEMA_NAME}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION;".format(SCHEMA_NAME=self._schema_name)
+            sql = "SELECT interventionkey FROM {SCHEMA_NAME}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION;"\
+                .format(SCHEMA_NAME=self._schema_name)
             _intervention_keys = self._dw_connection.query_with_result(sql)
 
         # Otherwise, getting related intervention keys for given alert types.
@@ -36,7 +36,7 @@ class GetInterventionKeyList(object):
                   "OR AlertSubType IN ({TYPE_LIST});".format(SCHEMA_NAME=self._schema_name, TYPE_LIST=_in_type_list)
             print(sql)
             _intervention_keys = self._dw_connection.query_with_result(sql)
-
+            
         _intervention_key_list = ','.join([str(__tmp_key['INTERVENTIONKEY']) for __tmp_key in _intervention_keys])
 
         print("-------------- Calling GetInterventionKeyList function ended --------------\n")

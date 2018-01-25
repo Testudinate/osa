@@ -145,4 +145,30 @@ Phase2: Ultimately “Feedback Service” will handle feedbacks from RDP & Porta
 Scorecard job will also need to sync feedback as well. 
 
 
-----
+---------------------------------2, 
+1, ANL_META_RAW_ALERTS_SEQ
+   这个表的设计和使用。AFM的period_key是去max(incidents.period_key). 那如果有这个表就不需要读incidents表。看如何设计
+   如果有多个seq_num，取最大的？ 需要加status么？
+   AG生成这个表。加个参数判断是否需要强制重跑，update这个表，不需要status字段
+   
+2, sync的逻辑准备把所有的vendor都放到一张表里面， 因为load到表需要物理表，而且表已经存在。每次load数据之前删掉当前vendor对应的数据即可。
+   有三张表需要sync, 
+   ANL_RULE_ENGINE_UPC_STORE_LIST, ANL_RULE_ENGINE_SUB_LEVEL_FILTER, ANL_FACT_FEEDBACK(RDP, Vertica-Vertica比较简单)
+   创建一个tempplate table 使用临时表。
+   
+3, swap_partition 到target表. target表的结构？
+   anl_fact_alert table. 
+
+4, ANL_RULE_ENGINE_META_PROVIDERS 和 ANL_RULE_ENGINE_META_DATA_PROVIDERS 还需要么？
+
+5, 不需要在检测是否已经issue过了，因为每次AFM被trigger肯定是因为alert Generation 生成了 raw alerts, 然后trigger了AFM. 
+   而且现在有两个表，所以每次都会refresh target table。
+   还是需要判断，不过可以加个参数判断是否需要强制重跑
+   
+6, ANL_DIM_OSM_INTERVENTIONCLASSIFICATION & aussumption.
+   先sync到Vertica
+
+
+---------------------------------3, 
+remove all prints and uneccessary debug code
+change the connection string and adding logs

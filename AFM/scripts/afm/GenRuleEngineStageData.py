@@ -4,13 +4,16 @@
 
 class GenRuleEngineStageData(object):
 
-    def __init__(self, conn, context):
+    def __init__(self, dw_conn, app_conn, context):
         # self.dw_connection = DWAccess()
-        self._dw_connection = conn
+        self._dw_connection = dw_conn
+        self._app_connection = app_conn
         self._context = context
         self._schema_name = self._context["SCHEMA_NAME"]
         self._vendor_key = self._context["VENDOR_KEY"]
+        self._retailer_key = self._context["RETAILER_KEY"]
         self._retailer_name = self._context["RETAILER_NAME"]
+        self._force_rerun = self._context["FORCE_RERUN"]
 
     def gen_stage_table(self):
         """
@@ -23,29 +26,37 @@ class GenRuleEngineStageData(object):
     def __process(self):
         print("\n-------------- Calling GenRuleEngineStageData class --------------")
         sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ CASE WHEN MAX(Period_Key) IS NULL THEN 19000101 " \
-              "       ELSE MAX(Period_Key) END AS maxinitialday " \
+              "       ELSE MAX(Period_Key) END AS max_initial_day " \
               "FROM {schemaName}.anl_fact_osm_incidents WHERE vendor_key = {VENDOR_KEY}"\
             .format(schemaName=self._schema_name,
                     VENDOR_KEY=self._vendor_key)
         _max_initial_day = self._dw_connection.query_scalar(sql)[0]
         # print(_max_initial_day)
 
+        # "Alert Generation" will update this meta table ANL_META_RAW_ALERTS_SEQ.
+        sql = "SELECT MAX(seq_num) FROM ANL_META_RAW_ALERTS_SEQ " \
+              "WHERE vendor_key = {0} AND retailer_key = {1} and alert_day = {2}"\
+            .format(self._vendor_key, self._retailer_key, _max_initial_day)
+        _seq_num = self._app_connection.query_scalar(sql)[0]
+
         # for test, use ISSUANCEID=1, we need to use ISSUANCEID=0
         sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) cnt " \
-              "FROM (SELECT 1 AS dummy FROM {schemaName}.anl_fact_osm_incidents " \
-              "      WHERE Period_Key = {maxinitialday} AND vendor_key = {VENDOR_KEY} " \
+              "FROM (SELECT 1 AS dummy FROM {schemaName}.ANL_FACT_ALERT " \
+              "      WHERE Period_Key = {max_initial_day} AND vendor_key = {VENDOR_KEY} " \
               "      AND ISSUANCEID = 0 LIMIT 1) x"\
             .format(schemaName=self._schema_name,
-                    maxinitialday=_max_initial_day,
+                    max_initial_day=_max_initial_day,
                     VENDOR_KEY=self._vendor_key)
         rule_already_executed = self._dw_connection.query_scalar(sql)[0]
 
-        if rule_already_executed == 1:
+        # if alerts have already been issued on that day, and no need to rerun by force. then exit.
+        if rule_already_executed == 1 and self._force_rerun == 0:
             # Write-Log $sqlConn "rule engine" 99999 "rule engine already executed for the most recent alerts,exiting" "info"
             print("Rule engine already executed for the most recent alerts,exiting")
             exit(1)
 
-        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ 'WHEN a.interventionkey='||interventionkey::VARCHAR(100)||' THEN '|| rankCalculation||' ' AS value " \
+        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ 'WHEN a.interventionkey='||interventionkey::VARCHAR(100)||' " \
+              "       THEN '|| rankCalculation||' ' AS value " \
               "FROM {SCHEMA_NAME}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION " \
               "WHERE rankCalculation IS NOT NULL".format(SCHEMA_NAME=self._schema_name)
         _intervention_key_case_when_sql = ' CASE '
@@ -82,12 +93,13 @@ class GenRuleEngineStageData(object):
               "INNER JOIN {schemaName}.olap_store d " \
               "ON a.retailer_key = d.retailer_key AND a.store_key = d.store_key " \
               "WHERE Period_Key = {maxinitialday} AND a.InterventionKey <> 1" \
-              "AND a.vendor_key = {vendorKey};"\
+              "AND a.vendor_key = {vendorKey} and seq_num = {seq_num} ;"\
             .format(insertAlertColumns=insert_alert_columns,
                     interventionKeyCaseWhenSQL=_intervention_key_case_when_sql,
                     schemaName=self._schema_name,
                     maxinitialday=_max_initial_day,
-                    vendorKey=self._vendor_key)
+                    vendorKey=self._vendor_key,
+                    seq_num=_seq_num)
 
         self._dw_connection.execute("DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_PRE")
         self._dw_connection.execute(sql)
@@ -128,6 +140,7 @@ class GenRuleEngineStageData(object):
         loadIDForstoreMapping = self._dw_connection.query_scalar(sql)[0]
         print("loadIDForstoreMapping is: ", loadIDForstoreMapping)
 
+        # TODO : also need to confirm below logic
         if loadIDForUPCMapping != -1 and loadIDForstoreMapping != -1:
             print("Processing advantage feedback")
             if self._retailer_name.lower() == 'target'.lower():

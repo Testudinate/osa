@@ -1,21 +1,24 @@
+#!/usr/bin/python3
+
 from RunRuleEngine import RunRuleEngine
 from common.DBOperation import DWAccess
 from common.DBOperation import APPAccess
-from SyncTable import SyncTable
+
 
 class RuleEngineMain(object):
-    def __init__(self, vendor_key, retailer_key, silo_type):
+    def __init__(self, vendor_key, retailer_key, silo_type, force_rerun=0):
         self._vendor_key = vendor_key
         self._retailer_key = retailer_key
         self._dw_connection = DWAccess()
         self._app_connection = APPAccess()
         # self._silo_db_name = silo_db_name
         # self._silo_server_name = silo_server_name
-        self._silo_type = silo_type
+        self._force_rerun = force_rerun     # rerun AFM even alerts had been issued already. default: 0
+        self._silo_type = silo_type         # silo type: [WM / SVR]
         self._context = self._getting_context()
-        self._sync_data = SyncTable(self._app_connection, self._dw_connection, self._context)
         self._run_rule_engine = RunRuleEngine(self._dw_connection, self._app_connection, self._context)
 
+    # TODO : will use a separate Service to get below parameters instead of doing this in AFM process.
     def _getting_retailer_name(self):
         sql = "SELECT retailer_sname FROM rsi_dim_retailer WHERE retailer_key = {RETAILER_KEY}"\
             .format(RETAILER_KEY=self._retailer_key)
@@ -42,12 +45,11 @@ class RuleEngineMain(object):
                         VENDOR_NAME=self._getting_vendor_name(),
                         RETAILER_NAME=self._getting_retailer_name(),
                         SUFFIX=self._vendor_key,
-                        SILO_TYPE=self._check_silo_type())
+                        SILO_TYPE=self._check_silo_type(),
+                        FORCE_RERUN=self._force_rerun)
         return _context
 
     def main_process(self):
-        self._sync_data.sync_table('ANL_RULE_ENGINE_SUB_LEVEL_FILTER','ANL_RULE_ENGINE_SUB_LEVEL_FILTER_55')
-        self._sync_data.sync_table('ANL_RULE_ENGINE_UPC_STORE_LIST','ANL_RULE_ENGINE_UPC_STORE_LIST_55')
         self._run_rule_engine.rule_process()
 
 if __name__ == '__main__':

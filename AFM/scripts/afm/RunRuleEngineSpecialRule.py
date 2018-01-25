@@ -18,6 +18,7 @@ class RunRuleEngineSpecialRule(object):
         self._schema_name = context["SCHEMA_NAME"]
         self._suffix = "_" + context["SUFFIX"]
         self._afm_silo_type = self._context['SILO_TYPE']
+        self._vendor_key = self._context["VENDOR_KEY"]
         # self._hub_id = hub_id
         self._run_feedback = None
         self._remove_duplication = RemoveDuplication(self._dw_connection, self._context)
@@ -91,7 +92,8 @@ class RunRuleEngineSpecialRule(object):
         if _metrics_type == 'store-alertType filter':
             sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
                   "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP ON COMMIT PRESERVE ROWS AS " \
-                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ a.vendor_key vendor_key, a.retailer_key retailer_key, a.IncidentID as id " \
+                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ a.vendor_key as vendor_key, " \
+                  "       a.retailer_key as retailer_key, a.IncidentID as id " \
                   "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} a, " \
                   "{schemaName}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION b " \
                   "WHERE a.InterventionKey=b.InterventionKey AND COALESCE(a.RSI_ALERT_TYPE,0) & b.AlertIntegerType=0 " \
@@ -121,7 +123,8 @@ class RunRuleEngineSpecialRule(object):
             if _metrics_type.lower() == 'feedback'.lower():
                 _file_id = 'feedback'
                 _in_not_in = ' IN '
-                _join_column = "CAST(vendor_key AS VARCHAR(20)) ||'-' || CAST(retailer_key AS VARCHAR(20)) || '-' ||storeid || '-' || upc || '-' || COALESCE(sublevel.SUB_LEVEL_VALUE,'default')"
+                _join_column = "CAST(ruleset.vendor_key AS VARCHAR(20)) ||'-' || CAST(ruleset.retailer_key AS VARCHAR(20)) " \
+                               "|| '-' ||storeid || '-' || upc || '-' || COALESCE(sublevel.SUB_LEVEL_VALUE,'default')"
                 # Run-Feedback $verticaConn $sqlConn $hubConn {schemaName} $hubID -inaccurateAlertsDys $parameter1
                 # -notInPlanogramDays $parameter2 -trueAlertDays $parameter3 -ruleSetId {ruleSetId} -ruleID $ruleID -siloID $siloID
                 self._run_feedback = RunFeedback(self._dw_connection, self._app_connection, self._context, _parameter1,
@@ -139,9 +142,10 @@ class RunRuleEngineSpecialRule(object):
             print(_join_column)
             # NXG-17764: in case "Alert Type" is not enabled.
             sql = "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP ON COMMIT preserve ROWS as " \
-                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ vendor_key,retailer_key,{providerBaseTablePkColumn} as id " \
+                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ ruleset.vendor_key, ruleset.retailer_key," \
+                  "       {providerBaseTablePkColumn} as id " \
                   "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} ruleset " \
-                  "LEFT JOIN {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER sublevel " \
+                  "LEFT JOIN {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{suffix} sublevel " \
                   "ON ruleset.AlertSubType = sublevel.SUB_LEVEL_VALUE AND sublevel.rule_set_id = {ruleSetId} " \
                   "AND sublevel.rule_id = {ruleID} AND SUB_LEVEL_CATEGORY = 'Alert Type' " \
                   "WHERE {joinColumn} {inNotIn} (SELECT value FROM {schemaName}.ANL_RULE_ENGINE_STAGE_RULE_LIST WHERE file_id='{fileID}') " \
@@ -153,7 +157,8 @@ class RunRuleEngineSpecialRule(object):
                                                                            inNotIn=_in_not_in,
                                                                            fileID=_file_id,
                                                                            interventionKeyList=intervention_key_list,
-                                                                           suffix=self._suffix)
+                                                                           suffix=self._suffix,
+                                                                           vendor_key=self._vendor_key)
             print(sql)
             self._dw_connection.execute(sql)
 

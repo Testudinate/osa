@@ -14,9 +14,9 @@ from removeDuplication import *
 
 class RunRuleEngine(object):
 
-    def __init__(self, conn, app_conn, context):
+    def __init__(self, dw_conn, app_conn, context):
         # self._dw_connection = DWAccess()
-        self._dw_connection = conn
+        self._dw_connection = dw_conn
         self._app_connection = app_conn
         self._context = context
         self._vendor_key = self._context['VENDOR_KEY']
@@ -79,6 +79,8 @@ class RunRuleEngine(object):
                       ") ON COMMIT PRESERVE ROWS;"
                 self._dw_connection.execute(sql)
 
+                # TODO : no idea if below 2 tables are required anymore.
+                # ANL_RULE_ENGINE_META_PROVIDERS & ANL_RULE_ENGINE_META_DATA_PROVIDERS
                 # engine provider pre process
                 sql = "SELECT CASE WHEN PROVIDER_PRE_PROCESSING_SP IS NULL THEN '' " \
                       "       ELSE PROVIDER_PRE_PROCESSING_SP END AS functionName " \
@@ -93,19 +95,19 @@ class RunRuleEngine(object):
                 self._check_rule_engine.check_rule_engine()
 
                 sql = "SELECT CASE WHEN PROVIDER_PRE_PROCESSING_SP IS NULL THEN '' " \
-                      "       ELSE PROVIDER_PRE_PROCESSING_SP END AS FUNCTIONNAME, " \
+                      "       ELSE PROVIDER_PRE_PROCESSING_SP END AS FUNCTION_NAME, " \
                       "       PROVIDER_POST_PROCESSING_SP,PROVIDER_BASE_TABLE_PK_COLUMN " \
                       "FROM ANL_RULE_ENGINE_META_DATA_PROVIDERS " \
                       "WHERE DATA_PROVIDER_NAME = '{DATA_PROVIDER_NAME}' "\
                     .format(DATA_PROVIDER_NAME=_data_provider_name)
                 print(sql)
                 row = self._app_connection.query_with_result(sql)[0]
-                _function_name = row['FUNCTIONNAME']
+                _function_name = row['FUNCTION_NAME']
                 _provider_base_table_PK_column = row['PROVIDER_BASE_TABLE_PK_COLUMN']
                 _data_provider_post_processing_function = row['PROVIDER_POST_PROCESSING_SP']
                 print(_function_name, _provider_base_table_PK_column, _data_provider_post_processing_function)
-                # self._gen_stage_data = GenRuleEngineStageData(self._dw_connection, self._context)
-                self._gen_stage_data = eval("{FUNC_NAME}(self._dw_connection, self._context)"
+                # self._gen_stage_data = GenRuleEngineStageData(self._dw_connection, self._app_connection, self._context)
+                self._gen_stage_data = eval("{FUNC_NAME}(self._dw_connection, self._app_connection, self._context)"
                                             .format(FUNC_NAME=_function_name.replace('-', '')))
                 self._gen_stage_data.gen_stage_table()
 
@@ -150,7 +152,8 @@ class RunRuleEngine(object):
                     print(msg)
                     # Write-Log $sqlConn "rule engine" 99999 $msg $inProgress
 
-                    sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) FROM (SELECT * FROM ANL_RULE_ENGINE_STAGE_FACT LIMIT 1) x;"
+                    sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) " \
+                          "FROM (SELECT * FROM ANL_RULE_ENGINE_STAGE_FACT LIMIT 1) x;"
                     _row_exists = self._dw_connection.query_scalar(sql)[0]
                     if _row_exists == 0:
                         msg = "There is no data to be processed for (Vendor: %s Retailer: %s) , " \
@@ -161,9 +164,9 @@ class RunRuleEngine(object):
                     """
                     create a stage table for the rule set, every rule under this rule set will process based on
                     table of RSI_ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix}. If an alert will be processed by multiple rule set,
-                    then the owner set by a previous rule set won't be overwritten by a later rule set. e.g if an anlert is
+                    then the owner set by a previous rule set won't be overwritten by a later rule set. e.g if an alert is
                     set the owner as 'Ahold', then an SVR rule set will ignore that alert and won't overwrite it. If multiple
-                    rule set for a SVR will process the same alert, the first rule set will has higher prioirty.
+                    rule set for a SVR will process the same alert, the first rule set will has higher priority.
                     """
                     sql = "DROP TABLE IF EXISTS {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix};" \
                           "CREATE TABLE {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} AS " \
@@ -235,7 +238,8 @@ class RunRuleEngine(object):
 
                     _stage_table = "{schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix}"\
                         .format(schemaName=self._schema_name, suffix=self._suffix)
-                    sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) FROM {stage_table} ".format(stage_table=_stage_table)
+                    sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) FROM {stage_table} "\
+                        .format(stage_table=_stage_table)
                     print("There are %d rows in table of %s" % (self._dw_connection.query_scalar(sql)[0], _stage_table))
 
                     sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) cnt " \
@@ -284,7 +288,8 @@ class RunRuleEngine(object):
                         print(msg)
 
                     sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET; " \
-                          "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET ON COMMIT PRESERVE ROWS AS " \
+                          "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET " \
+                          "ON COMMIT PRESERVE ROWS AS " \
                           "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ vendor_key, retailer_key, " \
                           "       {providerBaseTablePKColumn} id, CAST(NULL AS VARCHAR(4000)) AS reject_reasons," \
                           "       CAST(NULL AS VARCHAR(100)) AS OWNER " \
@@ -402,9 +407,10 @@ class RunRuleEngine(object):
 
                         if _metrics_type.lower() == "Value Filter".lower():
                             _sql_concat = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_PROCESSING_ORDER; " \
-                                        "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_PROCESSING_ORDER ON COMMIT PRESERVE ROWS AS " \
-                                        "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ vendor_key,retailer_key,incidentid as id, " \
-                                        " {sub_sqlconcat} FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} "\
+                                          "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_PROCESSING_ORDER ON COMMIT PRESERVE ROWS AS " \
+                                          "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ vendor_key,retailer_key," \
+                                          " incidentid as id, {sub_sqlconcat} " \
+                                          "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} "\
                                 .format(sub_sqlconcat=_sql_concat[:-1],
                                         schemaName=self._schema_name,
                                         suffix=self._suffix)
@@ -421,13 +427,13 @@ class RunRuleEngine(object):
                             for column in _column_set:
                                 _column_name =column['COLUMN_NAME']
                                 _tmp_array.append(" CASE WHEN \"{columnName}\" = '1' THEN '' ELSE \"{columnName}\"||',' END".format(columnName=_column_name))
-                                # sql_reject_reason = _tmp_array - join "||"
 
                             _sql_reject_reason = "||".join(_tmp_array)
                             print("sql reject reason is:", _sql_reject_reason)
 
                             sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
-                                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP ON COMMIT PRESERVE ROWS AS " \
+                                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
+                                  "ON COMMIT PRESERVE ROWS AS " \
                                   "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ vendor_key,retailer_key,id," \
                                   "SUBSTRING(temp_reject_reasons,0,length(temp_reject_reasons)) as reject_reasons " \
                                   "FROM (SELECT vendor_key,retailer_key,id,{sqlRejectReason} AS temp_reject_reasons " \
@@ -435,14 +441,11 @@ class RunRuleEngine(object):
                             print(sql)
                             self._dw_connection.execute(sql)
 
-                            # self._dw_connection.execute("drop table if exists OSA_AHOLD_BEN.ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
-                            #                             "create table OSA_AHOLD_BEN.ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP as " \
-                            #                             "select * from ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP")
-
                             self._UpdateTargetTable.update_target_table('')
 
-                        ## end of processing order
-                        msg = "Working on (modified) processing order of {processingOrder} - completed".format(processingOrder=_processing_order)
+                        # end of processing order
+                        msg = "Working on (modified) processing order of {processingOrder} - completed"\
+                            .format(processingOrder=_processing_order)
                         # Write-Log $sqlConn "rule engine" 99999 $msg $completed
                         print(msg)
                     print("already_removed_duplication is :", already_removed_duplication)
@@ -453,7 +456,7 @@ class RunRuleEngine(object):
                     # end of rule set
                     # $ruleSetName
 
-                    print("rule set name is:",_rule_set_name)
+                    print("rule set name is:", _rule_set_name)
                     sql = "UPDATE /*+ DIRECT, label(GX_OSM_RULE_ENGINE)*/ ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET " \
                           "SET reject_reasons='{ruleSetName}('||reject_reasons||')' " \
                           "WHERE reject_reasons is not null and reject_reasons <> ''".format(ruleSetName=_rule_set_name)
@@ -470,10 +473,6 @@ class RunRuleEngine(object):
                          FROM ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET""".format(owner=_owner)
                     print(sql)
                     self._dw_connection.execute(sql)
-                    # self._dw_connection.execute("drop table if exists OSA_AHOLD_BEN.ANL_RULE_ENGINE_STAGE_FACT_TARGET; " \
-                    #                             "create table OSA_AHOLD_BEN.ANL_RULE_ENGINE_STAGE_FACT_TARGET as " \
-                    #                             "select * from ANL_RULE_ENGINE_STAGE_FACT_TARGET")
-
 
                     sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) FROM ANL_RULE_ENGINE_STAGE_FACT_TARGET"
                     print("There are %s rows in table of ANL_RULE_ENGINE_STAGE_FACT_TARGET" % self._dw_connection.query_scalar(sql)[0])
@@ -548,6 +547,7 @@ class RunRuleEngine(object):
             raise
         finally:
             self._dw_connection.close_conn()
+            self._app_connection.close_conn()
 
 
 if __name__ == '__main__':

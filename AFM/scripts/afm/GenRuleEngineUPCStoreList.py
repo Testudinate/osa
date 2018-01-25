@@ -10,6 +10,7 @@ class GenRuleEngineUPCStoreList(object):
         self._schema_name = context["SCHEMA_NAME"]
         self._vendor_key = context["VENDOR_KEY"]
         self._retailer_key = context["RETAILER_KEY"]
+        self._suffix = "_" + context["SUFFIX"]
 
     def gen_stage_rule_list_table(self):
         """
@@ -29,7 +30,7 @@ class GenRuleEngineUPCStoreList(object):
               "                  ELSE 'STOREID||''-''||UPC' END attribute_name,  " \
               "             CASE WHEN a.UPC = '-' THEN c.store_id WHEN a.storeid = '-' THEN b.upc " \
               "                  ELSE c.store_id || '-' || b.upc END attribute_value, a.upc, a.storeid " \
-              "      FROM {schemaName}.ANL_RULE_ENGINE_UPC_STORE_LIST a " \
+              "      FROM {schemaName}.ANL_RULE_ENGINE_UPC_STORE_LIST{suffix} a " \
               "      LEFT JOIN {schemaName}.olap_item_osm b  " \
               "	     ON (CASE WHEN ISNUMFORMAT(a.UPC) = 'true' THEN CAST(CAST(a.UPC as DECIMAL(20, 0)) AS VARCHAR(100)) ELSE a.UPC END) =  " \
               "	        (CASE WHEN ISNUMFORMAT(b.UPC) = 'true' THEN CAST(CAST(b.UPC as DECIMAL(20, 0)) AS VARCHAR(100)) ELSE b.UPC END) " \
@@ -40,12 +41,14 @@ class GenRuleEngineUPCStoreList(object):
               "      AND c.RETAILER_KEY = {RETAILER_KEY}" \
               ") x;".format(schemaName = self._schema_name,
                             VENDOR_KEY=self._vendor_key,
-                            RETAILER_KEY=self._retailer_key)
+                            RETAILER_KEY=self._retailer_key,
+                            suffix=self._suffix)
         self._dw_connection.execute(sql)
 
         sql = "SELECT /*+label(GX_OSM_RULE_ENGINE)*/ COUNT(*) FROM anl_rule_engine_stage_rule_list_temp1"
         print("There are %d rows in table of anl_rule_engine_stage_rule_list_temp1" % (self._dw_connection.query_scalar(sql)[0]))
 
+        # TODO : anl_rule_engine_stage_rule_list staging table/temp table??
         sql = "TRUNCATE TABLE {schemaName}.anl_rule_engine_stage_rule_list; " \
               "INSERT INTO {schemaName}.anl_rule_engine_stage_rule_list " \
               "SELECT /*+label(GX_OSM_RULE_ENGINE)*/  FILE_ID::VARCHAR(10), " \
@@ -54,6 +57,7 @@ class GenRuleEngineUPCStoreList(object):
               "WHERE attribute_value IS NOT NULL".format(schemaName = self._schema_name)
         self._dw_connection.execute(sql)
 
+        # FIXME :
         sql = "SELECT /*+label(GX_OSM_RULE_ENGINE)*/ COUNT(*) " \
               "FROM {schemaName}.anl_rule_engine_stage_rule_list".format(schemaName=self._schema_name)
         print("There are %d rows in table of %s.anl_rule_engine_stage_rule_list" % (self._dw_connection.query_scalar(sql)[0], self._schema_name))

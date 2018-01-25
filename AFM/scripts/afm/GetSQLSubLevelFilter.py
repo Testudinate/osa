@@ -28,12 +28,16 @@ class GetSQLSubLevelFilter(object):
         # return SQL for sub level filter
 
         _sqlToReturn = ""
-        sql = "SELECT /*+label(GX_OSM_RULE_ENGINE)*/ * FROM {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER " \
+        sql = "SELECT /*+label(GX_OSM_RULE_ENGINE)*/ * FROM {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{suffix} " \
               "WHERE rule_id={ruleId} and rule_set_id={ruleSetID} AND SUB_LEVEL_CATEGORY <> 'Alert Type' "\
-            .format(schemaName=self._schema_name, ruleId=rule_id, ruleSetID=rule_set_id)
+            .format(schemaName=self._schema_name,
+                    ruleId=rule_id,
+                    ruleSetID=rule_set_id,
+                    suffix=self._suffix)
         print(sql)
         _result_sets = self._dw_connection.query_with_result(sql)
         print(_result_sets, type(_result_sets))
+
         loop_times = 0
         for row in _result_sets:
             print("SQLSubLevel condition is:", condition)
@@ -66,7 +70,8 @@ class GetSQLSubLevelFilter(object):
             _sqlToReturn += " CASE WHEN {newCondition} THEN '{rejectReason}' ELSE '1' " \
                             "END \"rule:{providerSubType} {filterName}\" ".format(newCondition=_new_condition,
                                                                                   providerSubType=provider_subtype,
-                                                                                  filterName=filter_name, rejectReason=reject_reason)
+                                                                                  filterName=filter_name,
+                                                                                  rejectReason=reject_reason)
         else:
             _sqlToReturn += " ELSE CASE WHEN {newCondition} THEN '{rejectReason}' ELSE '1' END "\
                 .format(newCondition=_new_condition, rejectReason=reject_reason)

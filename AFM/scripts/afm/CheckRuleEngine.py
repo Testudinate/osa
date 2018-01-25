@@ -1,15 +1,17 @@
+from SyncTable import SyncTable
 
 
 class CheckRuleEngine(object):
 
-    def __init__(self, conn, app_conn, context):
-        self._dw_connection = conn
+    def __init__(self, dw_conn, app_conn, context):
+        self._dw_connection = dw_conn
         self._app_connection = app_conn
         self._context = context
         self._vendor_key = context["VENDOR_KEY"]
         self._retailer_key = context["RETAILER_KEY"]
         self._schema_name = context["SCHEMA_NAME"]
         self._suffix = "_" + context["SUFFIX"]
+        self._sync_data = SyncTable(source_conn=self._app_connection, target_conn=self._dw_connection, context=self._context)
 
     def check_rule_engine(self):
         """
@@ -21,6 +23,75 @@ class CheckRuleEngine(object):
         UI can check this table when users are saving configuration.
         """
         self.__process()
+
+        self.sync_rule_engine_tables()
+
+    # TODO : need to use temp table to store synced data from SqlServer instead of staging table.
+    # TODO : Should move below sync part after checking if AFM needs to be run/rerun.
+    def sync_rule_engine_tables(self):
+        # _source_table = _target_table = 'ANL_RULE_ENGINE_SUB_LEVEL_FILTER'
+        # self._sync_data.sync_table(_source_table, _target_table, ' where 1=1 ', 1)
+        # _source_table , _target_table = 'ANL_RULE_ENGINE_UPC_STORE_LIST', 'ANL_RULE_ENGINE_UPC_STORE_LIST'
+        # self._sync_data.sync_table(_source_table, _target_table, ' where 1=1 ', 1)
+
+        # getting associated rule_set_id of the given vendor & retailer to sync below 2 tables.
+        sql = "select rule_set_id from (select *,row_number() " \
+              "  over(partition by rule_set_name order by rule_set_id desc) as idx " \
+              "  From ANL_RULE_ENGINE_RULE_SET where vendor_key = {0} and retailer_key = {1}) tmp " \
+              "where idx=1 and enabled in ('T','Y')".format(self._vendor_key, self._retailer_key)
+        print(sql)
+        rule_sets = self._app_connection.query_with_result(sql)
+        rule_set_str = ','.join(str(rule_set["RULE_SET_ID"]) for rule_set in rule_sets)
+        print(rule_set_str)
+
+        # sync table ANL_RULE_ENGINE_SUB_LEVEL_FILTER from SqlServer to Vertica
+        sql = "drop table if exists {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{suffix}; " \
+              "create table if not exists {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{suffix} as " \
+              "select * from {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER_TEMPLATE where 1=0 "\
+            .format(schemaName=self._schema_name,
+                    suffix=self._suffix)
+        print(sql)
+        self._dw_connection.execute(sql)
+
+        source_sql = "SELECT distinct RULE_ID,RULE_SET_ID,METRICS_VALUE,PARAMETER2,PARAMETER3, " \
+                     "       SUB_LEVEL_VALUE,SUB_LEVEL_CATEGORY " \
+                     "FROM ANL_RULE_ENGINE_SUB_LEVEL_FILTER " \
+                     "WHERE RULE_SET_ID in ({ruleSetIDs})"\
+            .format(ruleSetIDs=rule_set_str,
+                    vendor_key=self._vendor_key,
+                    retailer_key=self._retailer_key)
+        print(source_sql)
+        self._sync_data.sync_table_with_sql(source_sql, 'ANL_RULE_ENGINE_SUB_LEVEL_FILTER{0}'.format(self._suffix))
+
+        rows = self._dw_connection.query_with_result("select * from {0}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{1}".format(self._schema_name, self._suffix))
+        print(rows)
+
+        # sync table ANL_RULE_ENGINE_UPC_STORE_LIST from SqlServer to Vertica
+        sql = "drop table if exists {schemaName}.ANL_RULE_ENGINE_UPC_STORE_LIST{suffix}; " \
+              "create table if not exists {schemaName}.ANL_RULE_ENGINE_UPC_STORE_LIST{suffix} as " \
+              "select * from {schemaName}.ANL_RULE_ENGINE_UPC_STORE_LIST_TEMPLATE where 1=0 "\
+            .format(schemaName=self._schema_name,
+                    suffix=self._suffix)
+        print(sql)
+        self._dw_connection.execute(sql)
+
+        source_sql = """SELECT FILE_ID, UPC, STOREID
+        FROM ANL_RULE_ENGINE_UPC_STORE_LIST lst
+        INNER JOIN ANL_RULE_ENGINE_RULE_SET rs
+        ON (lst.FILE_ID = rs.ITEM_SCOPE OR lst.FILE_ID = rs.STORE_SCOPE )
+        AND rs.RULE_SET_ID IN ({ruleSetIDs})
+        UNION
+        SELECT DISTINCT lst.FILE_ID, lst.UPC, lst.STOREID
+        FROM ANL_RULE_ENGINE_UPC_STORE_LIST lst
+        INNER JOIN ANL_RULE_ENGINE_RULES r
+        ON lst.FILE_ID = r.PARAMETER1 AND (r.RULE_ID = 27 OR r.RULE_ID = 28 OR r.RULE_ID = 29)
+        AND r.RULE_SET_ID IN ({ruleSetIDs})"""\
+            .format(ruleSetIDs=rule_set_str)
+        print(source_sql)
+        self._sync_data.sync_table_with_sql(source_sql, 'ANL_RULE_ENGINE_UPC_STORE_LIST{0}'.format(self._suffix))
+
+        rows = self._dw_connection.query_with_result("select * from {0}.ANL_RULE_ENGINE_UPC_STORE_LIST{1}".format(self._schema_name, self._suffix))
+        print(rows)
 
     def __process(self):
         print("\n-------------- Calling CheckRuleEngine class --------------")

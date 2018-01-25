@@ -43,15 +43,15 @@ class RunFeedback(object):
 
         sql="INSERT /*+ DIRECT, label(GX_OSM_RULE_ENGINE)*/ INTO {schemaName}.ANL_RULE_ENGINE_STAGE_SUB_LEVEL_FILTER_1{suffix} "\
             "SELECT SUB_LEVEL_VALUE, 'NotTrueAlert' alertType, METRICS_VALUE numdaystosuppress "\
-            "FROM {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER "\
+            "FROM {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{suffix} "\
             "WHERE rule_set_Id = {ruleSetId} AND rule_ID = {ruleID} and SUB_LEVEL_CATEGORY = 'Alert Type' "\
             "UNION ALL "\
             "SELECT  SUB_LEVEL_VALUE, 'NotOnPlanogram', PARAMETER2 "\
-            "FROM {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER "\
+            "FROM {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{suffix} "\
             "WHERE rule_set_Id = {ruleSetId} AND rule_ID = {ruleID} and SUB_LEVEL_CATEGORY = 'Alert Type' "\
             "UNION ALL "\
             "SELECT SUB_LEVEL_VALUE, 'TrueAlert', PARAMETER3 "\
-            "FROM {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER "\
+            "FROM {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{suffix} "\
             "WHERE rule_set_Id = {ruleSetId} AND rule_ID = {ruleID} and SUB_LEVEL_CATEGORY = 'Alert Type' "\
             "UNION ALL "\
             "SELECT 'default', 'NotOnPlanogram', '{notInPlanogramDays}' "\
@@ -74,18 +74,18 @@ class RunFeedback(object):
                                                             ruleID=self._rule_id)
         _alert_type_enabled = self.app_connection.query_scalar(sql)[0]
         if _alert_type_enabled != 0:
-            sqlForFeedback = \
+            _sql_for_feedback = \
                 "SELECT fdbk.Store_Id, fdbk.vendor_key, fdbk.Inner_UPC, fdbk.STORE_VISIT_DATE, " \
                 "       fdbk.FEEDBACK_DESCRIPTION, COALESCE(sublevel.SUB_LEVEL_VALUE,'default') AS OSM_MAJOR_CATEGORY, " \
                 "       fdbk.Merchandiser, fdbk.Retailer_Key, " \
                 "       ROW_NUMBER() OVER(PARTITION BY dim.AlertSubType, fdbk.Store_Id,fdbk.Inner_UPC ORDER BY STORE_VISIT_DATE desc) rn " \
                 "FROM {schemaName}.ANL_FACT_FEEDBACK fdbk " \
-                "INNER JOIN {schemaName}.ANL_FACT_OSM_INCIDENTS alert " \
+                "INNER JOIN {schemaName}.ANL_FACT_ALERTS alert " \
                 "ON fdbk.ALERT_ID = alert.IncidentID and fdbk.RETAILER_KEY = alert.RETAILER_KEY " \
                 "AND fdbk.VENDOR_KEY = alert.VENDOR_KEY " \
                 "INNER JOIN {schemaName}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION dim " \
                 "ON alert.InterventionKey = dim.InterventionKey " \
-                "LEFT JOIN {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER sublevel " \
+                "LEFT JOIN {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{suffix} sublevel " \
                 "ON dim.AlertSubType = sublevel.SUB_LEVEL_VALUE and rule_set_id = {ruleSetId} AND rule_id = {ruleID} " \
                 "AND SUB_LEVEL_CATEGORY = 'Alert Type' " \
                 "WHERE alert.VENDOR_KEY = {VENDOR_KEY}".format(schemaName=self._schema_name,
@@ -93,13 +93,13 @@ class RunFeedback(object):
                                                                ruleID=self._rule_id,
                                                                VENDOR_KEY=self._vendor_key)
         else:
-            sqlForFeedback = "SELECT fdbk.Store_Id, fdbk.vendor_key, fdbk.Inner_UPC, fdbk.STORE_VISIT_DATE, fdbk.FEEDBACK_DESCRIPTION, " \
+            _sql_for_feedback = "SELECT fdbk.Store_Id, fdbk.vendor_key, fdbk.Inner_UPC, fdbk.STORE_VISIT_DATE, fdbk.FEEDBACK_DESCRIPTION, " \
                              "       'default' as OSM_MAJOR_CATEGORY, fdbk.Merchandiser,fdbk.Retailer_Key, " \
                              "       ROW_NUMBER() OVER(PARTITION BY fdbk.Store_Id,fdbk.Inner_UPC ORDER BY fdbk.STORE_VISIT_DATE desc) rn " \
                              "FROM {schemaName}.ANL_FACT_FEEDBACK fdbk " \
                              "WHERE fdbk.source != 'ARIA' or fdbk.source IS NULL".format(schemaName=self._schema_name)
 
-        print(sqlForFeedback)
+        print(_sql_for_feedback)
 
         sql = "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_RULE_ENGINE_STAGE_SUB_LEVEL_FILTER_1{suffix}'); "\
               "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_DIM_FEEDBACK_ASSUMPTIONS'); "\
@@ -124,7 +124,7 @@ class RunFeedback(object):
             "AND assumption.alertType = sub_level.alertType "\
             "WHERE DATEDIFF(day, STORE_VISIT_DATE, GETDATE()) <= numdaystosuppress "\
             .format(schemaName=self._schema_name, suffix=self._suffix)
-        sql = sql.replace("sqlForFeedback_placeholder", sqlForFeedback)
+        sql = sql.replace("sqlForFeedback_placeholder", _sql_for_feedback)
         print(sql)
         self.dw_connection.execute(sql)
         print("-------------- Calling RunFeedback class ended --------------\n")

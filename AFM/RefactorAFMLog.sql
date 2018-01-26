@@ -168,6 +168,7 @@ Scorecard job will also need to sync feedback as well.
 6, ANL_DIM_OSM_INTERVENTIONCLASSIFICATION & aussumption.
    先sync到Vertica
 
+7, period_key也要作为参数，因为有可能会重跑历史的数据
 
 ---------------------------------3, 
 remove all prints and uneccessary debug code

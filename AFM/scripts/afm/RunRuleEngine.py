@@ -23,6 +23,9 @@ class RunRuleEngine(object):
         self._retailer_key = self._context['RETAILER_KEY']
         self._schema_name = self._context['SCHEMA_NAME']
         self._suffix = "_" + self._context['SUFFIX']
+        self._seq_num = self._context["SEQ_NUM"]
+        self._max_initial_day = self._context["PERIOD_KEY"]
+        self._force_rerun = self._context["FORCE_RERUN"]
         self.already_removed_duplication = False
         # self._log = Log() # to be coded
         # self._config = Config() # to be coded
@@ -41,6 +44,27 @@ class RunRuleEngine(object):
     def rule_process(self):
         try:
             print("Calling RunRuleEngine...")
+
+            # Move below part from GenRuleEngineStageData.py module.
+            # check if alerts had already been issued on that day, This should be checked at the first place.
+            # for test, use ISSUANCEID=1, we need to use ISSUANCEID=0
+            sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) cnt " \
+                  "FROM (SELECT 1 AS dummy FROM {schemaName}.ANL_FACT_ALERT " \
+                  "      WHERE Period_Key = {max_initial_day} AND vendor_key = {VENDOR_KEY} " \
+                  "      AND ISSUANCEID = 0 LIMIT 1) x" \
+                .format(schemaName=self._schema_name,
+                        max_initial_day=self._max_initial_day,
+                        VENDOR_KEY=self._vendor_key)
+            _already_executed = self._dw_connection.query_scalar(sql)[0]
+
+            # if alerts had already been issued on that day, and no need to rerun by force. then exit.
+            # TODO : replace all Write-log function after Log module is ready
+            if _already_executed == 1 and not self._force_rerun:
+                # Write-Log $sqlConn "rule engine" 99999 "rule engine already executed for the most recent alerts,exiting" "info"
+                print("Rule engine already executed for the most recent alerts and no need to re-run by force, exiting")
+                exit(1)
+
+            # TODO :  hardcoded "AFM" here. Check Powershell to see if table rsi_dim_silo is required anymore.
             sql = "IF (OBJECT_ID('tempdb..#TMP_ANL_RULE_ENGINE_STAGE_COMMON_1') IS NOT NULL)" \
                   "    DROP TABLE #TMP_ANL_RULE_ENGINE_STAGE_COMMON_1 " \
                   "SELECT 'AFM' AS PROVIDER_NAME, a.DATA_PROVIDER_NAME, " \
@@ -60,6 +84,7 @@ class RunRuleEngine(object):
                                                   RETAILER_KEY=self._retailer_key)
             print(sql)
             self._app_connection.execute(sql)
+
             sql = "SELECT DISTINCT PROVIDER_NAME,DATA_PROVIDER_NAME FROM #TMP_ANL_RULE_ENGINE_STAGE_COMMON_1;"
             providers = self._app_connection.query_with_result(sql)
 
@@ -79,7 +104,7 @@ class RunRuleEngine(object):
                       ") ON COMMIT PRESERVE ROWS;"
                 self._dw_connection.execute(sql)
 
-                # TODO : no idea if below 2 tables are required anymore.
+                # TODO : no idea if below 2 tables are required anymore. call function via eval
                 # ANL_RULE_ENGINE_META_PROVIDERS & ANL_RULE_ENGINE_META_DATA_PROVIDERS
                 # engine provider pre process
                 sql = "SELECT CASE WHEN PROVIDER_PRE_PROCESSING_SP IS NULL THEN '' " \

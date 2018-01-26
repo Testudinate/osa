@@ -13,47 +13,29 @@ class GenRuleEngineStageData(object):
         self._vendor_key = self._context["VENDOR_KEY"]
         self._retailer_key = self._context["RETAILER_KEY"]
         self._retailer_name = self._context["RETAILER_NAME"]
-        self._force_rerun = self._context["FORCE_RERUN"]
+        self._seq_num = self._context["SEQ_NUM"]
+        self._max_initial_day = self._context["PERIOD_KEY"]
 
     def gen_stage_table(self):
         """
         Preparing table ANL_RULE_ENGINE_STAGE_FACT from Source table ANL_FACT_OSM_INCIDENTS table.
-
-        :return:
+        Exiting if there is no data to be processed
+        :return: no returned value
         """
         self.__process()
 
     def __process(self):
         print("\n-------------- Calling GenRuleEngineStageData class --------------")
-        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ CASE WHEN MAX(Period_Key) IS NULL THEN 19000101 " \
-              "       ELSE MAX(Period_Key) END AS max_initial_day " \
-              "FROM {schemaName}.anl_fact_osm_incidents WHERE vendor_key = {VENDOR_KEY}"\
-            .format(schemaName=self._schema_name,
-                    VENDOR_KEY=self._vendor_key)
-        _max_initial_day = self._dw_connection.query_scalar(sql)[0]
+
+        # no need to get period_key from anl_fact_osm_incidents table directly.
+        # instead of using table ANL_META_RAW_ALERTS_SEQ which populated by upstreaming Service <Alert Generation>
+        # sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ CASE WHEN MAX(Period_Key) IS NULL THEN 19000101 " \
+        #       "       ELSE MAX(Period_Key) END AS max_initial_day " \
+        #       "FROM {schemaName}.anl_fact_osm_incidents WHERE vendor_key = {VENDOR_KEY}"\
+        #     .format(schemaName=self._schema_name,
+        #             VENDOR_KEY=self._vendor_key)
+        # _max_initial_day = self._dw_connection.query_scalar(sql)[0]
         # print(_max_initial_day)
-
-        # "Alert Generation" will update this meta table ANL_META_RAW_ALERTS_SEQ.
-        sql = "SELECT MAX(seq_num) FROM ANL_META_RAW_ALERTS_SEQ " \
-              "WHERE vendor_key = {0} AND retailer_key = {1} and alert_day = {2}"\
-            .format(self._vendor_key, self._retailer_key, _max_initial_day)
-        _seq_num = self._app_connection.query_scalar(sql)[0]
-
-        # for test, use ISSUANCEID=1, we need to use ISSUANCEID=0
-        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) cnt " \
-              "FROM (SELECT 1 AS dummy FROM {schemaName}.ANL_FACT_ALERT " \
-              "      WHERE Period_Key = {max_initial_day} AND vendor_key = {VENDOR_KEY} " \
-              "      AND ISSUANCEID = 0 LIMIT 1) x"\
-            .format(schemaName=self._schema_name,
-                    max_initial_day=_max_initial_day,
-                    VENDOR_KEY=self._vendor_key)
-        rule_already_executed = self._dw_connection.query_scalar(sql)[0]
-
-        # if alerts have already been issued on that day, and no need to rerun by force. then exit.
-        if rule_already_executed == 1 and self._force_rerun == 0:
-            # Write-Log $sqlConn "rule engine" 99999 "rule engine already executed for the most recent alerts,exiting" "info"
-            print("Rule engine already executed for the most recent alerts,exiting")
-            exit(1)
 
         sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ 'WHEN a.interventionkey='||interventionkey::VARCHAR(100)||' " \
               "       THEN '|| rankCalculation||' ' AS value " \
@@ -82,9 +64,9 @@ class GenRuleEngineStageData(object):
 
         # <2016-11-16 by Hong>
         # Remove IF-ELSE block as OSM_ITEM_NBR always exists in OLAP_ITEM_OSM
-        sql = "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_PRE ON COMMIT PRESERVE ROWS AS " \
-              "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ {insertAlertColumns}, AlertType, b.AlertSubType, b.Priority, " \
-              "       c.osm_item_nbr AS item_nbr, {interventionKeyCaseWhenSQL} " \
+        sql_for_pre_table = "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_PRE ON COMMIT PRESERVE ROWS AS " \
+              "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ {insertAlertColumns}, AlertType, b.AlertSubType, " \
+              "       b.Priority, c.osm_item_nbr AS item_nbr, {interventionKeyCaseWhenSQL} " \
               "FROM {schemaName}.anl_fact_osm_incidents a " \
               "INNER JOIN {schemaName}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION b " \
               "ON a.InterventionKey = b.InterventionKey " \
@@ -97,21 +79,30 @@ class GenRuleEngineStageData(object):
             .format(insertAlertColumns=insert_alert_columns,
                     interventionKeyCaseWhenSQL=_intervention_key_case_when_sql,
                     schemaName=self._schema_name,
-                    maxinitialday=_max_initial_day,
+                    maxinitialday=self._max_initial_day,
                     vendorKey=self._vendor_key,
-                    seq_num=_seq_num)
+                    seq_num=self._seq_num)
 
         self._dw_connection.execute("DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_PRE")
-        self._dw_connection.execute(sql)
+        self._dw_connection.execute(sql_for_pre_table)
         # tmp_result = self.dw_connection.query_with_result("select * from ANL_RULE_ENGINE_STAGE_FACT_PRE")
         sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) FROM ANL_RULE_ENGINE_STAGE_FACT_PRE"
-        print("There are %d in table of ANL_RULE_ENGINE_STAGE_FACT_PRE" % (self._dw_connection.query_scalar(sql)[0]))
+        __row_cnt = self._dw_connection.query_scalar(sql)[0]
+        if __row_cnt == 0:
+            print("There is no data to be processed for period_key:{0} & seq_num{1}."
+                  "Please check below SQL:\n{2}".format(self._max_initial_day,
+                                                        self._seq_num,
+                                                        sql_for_pre_table))
+            exit(1)
+
+        print("There are %d in table of ANL_RULE_ENGINE_STAGE_FACT_PRE" % __row_cnt)
         sql = "WITH temp AS (SELECT column_name FROM columns " \
               "WHERE table_schema = 'v_temp_schema' AND table_name = 'ANL_RULE_ENGINE_STAGE_FACT_PRE') " \
               "SELECT /*+ label(GX_OSM_RULE_ENGINE) */ 1 needToRename " \
               "WHERE 1 = (SELECT count(*) FROM temp WHERE column_name = 'MAJOR_CATEGORY') " \
               "AND 0 = (SELECT count(*) FROM temp WHERE column_name = 'OSM_MAJOR_CATEGORY');"
         _need_to_rename = self._dw_connection.query_scalar(sql)[0]
+
         if _need_to_rename == 1:
             sql="CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT ON COMMIT PRESERVE ROWS AS " \
                 "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ *,MAJOR_CATEGORY as OSM_MAJOR_CATEGORY " \

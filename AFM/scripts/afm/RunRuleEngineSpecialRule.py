@@ -1,6 +1,3 @@
-# Run-RuleEngineSpecialRule - verticaConn $verticaConn - sqlConn $sqlConn - hubConn $hubConn - schemaName $schemaName - hubID $hubID
-# - ruleSetId $ruleSetId - ruleID $ruleID - providerSubType $providerSubType - silo_type $silo_typeOfSiloRunningAFM - siloID $siloID
-# - interventionKeyList $interventionKeyList
 import datetime
 
 from GetSQLSubLevelFilter import *
@@ -23,7 +20,7 @@ class RunRuleEngineSpecialRule(object):
         self._run_feedback = None
         self._remove_duplication = RemoveDuplication(self._dw_connection, self._context)
         self._get_sub_level_filter = GetSQLSubLevelFilter(self._dw_connection, self._app_connection, self._context)
-        self._update_target = UpdateTargetTable(self._dw_connection,self._context)
+        self._update_target = UpdateTargetTable(self._dw_connection, self._context)
 
     def special_rule_processing(self, rule_set_id, rule_id, provider_sub_type, intervention_key_list):
         """
@@ -53,8 +50,10 @@ class RunRuleEngineSpecialRule(object):
             pass
             # . "$PSScriptRoot\RunFeedbackAlert.ps1"
 
-        self._dw_connection.execute("drop table if exists {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_3".format(schemaName = self._schema_name))
-        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ CASE WHEN parameter1 IS NULL THEN '' ELSE parameter1 END AS parameter1, " \
+        self._dw_connection.execute("drop table if exists {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_3"
+                                    .format(schemaName=self._schema_name))
+        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ " \
+              "CASE WHEN parameter1 IS NULL THEN '' ELSE parameter1 END AS parameter1, " \
               "CASE WHEN parameter2 IS NULL THEN '' ELSE parameter2 END AS parameter2, " \
               "CASE WHEN parameter3 IS NULL THEN '' ELSE parameter3 END AS parameter3, " \
               "CASE WHEN SUB_LEVEL_METRICS IS NULL THEN '' ELSE SUB_LEVEL_METRICS END AS SUB_LEVEL_METRICS_new " \
@@ -72,7 +71,7 @@ class RunRuleEngineSpecialRule(object):
         _meta_rule_row = self._app_connection.query_with_result(sql)[0]
         # print(_meta_rule_row, type(_meta_rule_row))
         _metrics_type = _meta_rule_row['METRICS_TYPE']
-        _metrics_name = _meta_rule_row['METRICS_NAME']
+        # _metrics_name = _meta_rule_row['METRICS_NAME']
         _metrics_reject_reason = _meta_rule_row['METRICS_REJECT_REASON']
         _filter_name = _meta_rule_row['FILTER_NAME']
 
@@ -91,7 +90,8 @@ class RunRuleEngineSpecialRule(object):
 
         if _metrics_type == 'store-alertType filter':
             sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
-                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP ON COMMIT PRESERVE ROWS AS " \
+                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
+                  "ON COMMIT PRESERVE ROWS AS " \
                   "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ a.vendor_key as vendor_key, " \
                   "       a.retailer_key as retailer_key, a.IncidentID as id " \
                   "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} a, " \
@@ -104,8 +104,10 @@ class RunRuleEngineSpecialRule(object):
             self._update_target.update_target_table(_metrics_reject_reason)
 
         # _metrics_type = 'fEEdback'
-        if (_metrics_type.lower() == 'Product Filter'.lower() or _metrics_type.lower() == 'Store Filter'.lower()
-            or _metrics_type.lower() == 'Store-Product Filter'.lower() or _metrics_type.lower() == 'Feedback'.lower()):
+        if (_metrics_type.lower() == 'Product Filter'.lower()
+                or _metrics_type.lower() == 'Store Filter'.lower()
+                or _metrics_type.lower() == 'Store-Product Filter'.lower()
+                or _metrics_type.lower() == 'Feedback'.lower()):
             _file_id = _parameter1
             _join_column = ''
             _in_not_in = ''
@@ -123,14 +125,16 @@ class RunRuleEngineSpecialRule(object):
             if _metrics_type.lower() == 'feedback'.lower():
                 _file_id = 'feedback'
                 _in_not_in = ' IN '
-                _join_column = "CAST(ruleset.vendor_key AS VARCHAR(20)) ||'-' || CAST(ruleset.retailer_key AS VARCHAR(20)) " \
+                _join_column = "CAST(ruleset.vendor_key AS VARCHAR(20)) ||'-' " \
+                               "|| CAST(ruleset.retailer_key AS VARCHAR(20)) " \
                                "|| '-' ||storeid || '-' || upc || '-' || COALESCE(sublevel.SUB_LEVEL_VALUE,'default')"
                 # Run-Feedback $verticaConn $sqlConn $hubConn {schemaName} $hubID -inaccurateAlertsDys $parameter1
-                # -notInPlanogramDays $parameter2 -trueAlertDays $parameter3 -ruleSetId {ruleSetId} -ruleID $ruleID -siloID $siloID
+                # -notInPlanogramDays $parameter2 -trueAlertDays $parameter3
+                # -ruleSetId {ruleSetId} -ruleID $ruleID -siloID $siloID
                 self._run_feedback = RunFeedback(self._dw_connection, self._app_connection, self._context, _parameter1,
                                                  _parameter2, _parameter3, rule_set_id, rule_id)
                 self._run_feedback.processing_feedback()
-                sql = "INSERT /*+ DIRECT, label(GX_OSM_RULE_ENGINE)*/ INTO {schemaName}.ANL_RULE_ENGINE_STAGE_RULE_LIST " \
+                sql = "INSERT /*+ DIRECT, label(GX_OSM_RULE_ENGINE)*/ INTO ANL_RULE_ENGINE_STAGE_RULE_LIST " \
                       "SELECT 'feedback','vendorkey-retailerkey-Store-UPC', " \
                       "CAST(vendorkey AS VARCHAR(20)) ||'-' || CAST(retailerkey AS VARCHAR(20)) || '-' ||StoreUPC " \
                       "FROM {schemaName}.ANL_RULE_ENGINE_AFM_FEEDBACK_STAGE{suffix}"\
@@ -141,30 +145,33 @@ class RunRuleEngineSpecialRule(object):
 
             print(_join_column)
             # NXG-17764: in case "Alert Type" is not enabled.
-            sql = "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP ON COMMIT preserve ROWS as " \
+            sql = "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
+                  "ON COMMIT PRESERVE ROWS AS " \
                   "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ ruleset.vendor_key, ruleset.retailer_key," \
                   "       {providerBaseTablePkColumn} as id " \
                   "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} ruleset " \
                   "LEFT JOIN {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{suffix} sublevel " \
                   "ON ruleset.AlertSubType = sublevel.SUB_LEVEL_VALUE AND sublevel.rule_set_id = {ruleSetId} " \
                   "AND sublevel.rule_id = {ruleID} AND SUB_LEVEL_CATEGORY = 'Alert Type' " \
-                  "WHERE {joinColumn} {inNotIn} (SELECT value FROM {schemaName}.ANL_RULE_ENGINE_STAGE_RULE_LIST WHERE file_id='{fileID}') " \
-                  "AND interventionkey IN ({interventionKeyList});".format(providerBaseTablePkColumn=_provider_pk_column,
-                                                                           schemaName=self._schema_name,
-                                                                           ruleID=rule_id,
-                                                                           ruleSetId=rule_set_id,
-                                                                           joinColumn=_join_column,
-                                                                           inNotIn=_in_not_in,
-                                                                           fileID=_file_id,
-                                                                           interventionKeyList=intervention_key_list,
-                                                                           suffix=self._suffix,
-                                                                           vendor_key=self._vendor_key)
+                  "WHERE {joinColumn} {inNotIn} " \
+                  "      (SELECT value FROM ANL_RULE_ENGINE_STAGE_RULE_LIST WHERE file_id='{fileID}') " \
+                  "AND interventionkey IN ({interventionKeyList}); "\
+                .format(providerBaseTablePkColumn=_provider_pk_column,
+                        schemaName=self._schema_name,
+                        ruleID=rule_id,
+                        ruleSetId=rule_set_id,
+                        joinColumn=_join_column,
+                        inNotIn=_in_not_in,
+                        fileID=_file_id,
+                        interventionKeyList=intervention_key_list,
+                        suffix=self._suffix,
+                        vendor_key=self._vendor_key)
             print(sql)
             self._dw_connection.execute(sql)
 
             sql = "DELETE /*+ DIRECT, label(GX_OSM_RULE_ENGINE)*/ " \
-                  "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_RULE_LIST " \
-                  "WHERE file_id='feedback'".format(schemaName=self._schema_name)
+                  "FROM ANL_RULE_ENGINE_STAGE_RULE_LIST " \
+                  "WHERE file_id='feedback'"
             print(sql)
             self._dw_connection.execute(sql)
             self._update_target.update_target_table(_metrics_reject_reason)
@@ -182,12 +189,14 @@ class RunRuleEngineSpecialRule(object):
                 _aggregate_column = 'UPC'
                 _sub_aggregate_column = 'STOREID'
             if intervention_key_list != '':
-                flag_intervention_key_list = " WHERE InterventionKey IN ({interventionKeyList})".format(interventionKeyList=intervention_key_list)
+                flag_intervention_key_list = " WHERE InterventionKey IN ({interventionKeyList}) "\
+                    .format(interventionKeyList=intervention_key_list)
 
             sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_TEMP_FACT_1; " \
                   "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_TEMP_FACT_1 ON COMMIT PRESERVE ROWS AS " \
-                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ vendor_key,retailer_key,InterventionKey,{providerBaseTablePkColumn} as id, " \
-                  "{aggregateColumn} AS aggregate_column, {subAggregateColumn} AS sub_aggregate_column " \
+                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ vendor_key,retailer_key,InterventionKey, " \
+                  "       {providerBaseTablePkColumn} as id, {aggregateColumn} AS aggregate_column, " \
+                  "       {subAggregateColumn} AS sub_aggregate_column " \
                   "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} {interventionKeyList}" \
                 .format(providerBaseTablePkColumn=_provider_pk_column,
                         aggregateColumn=_aggregate_column,
@@ -219,8 +228,10 @@ class RunRuleEngineSpecialRule(object):
             self._dw_connection.execute(sql)
 
             sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
-                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP ON COMMIT PRESERVE ROWS AS " \
-                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ a.vendor_key,a.retailer_key,{providerBaseTablePkColumn} AS id " \
+                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
+                  "ON COMMIT PRESERVE ROWS AS " \
+                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ a.vendor_key,a.retailer_key," \
+                  "       {providerBaseTablePkColumn} AS id " \
                   "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} a " \
                   "INNER JOIN ANL_RULE_ENGINE_TEMP_FACT_3 b " \
                   "ON {subAggregateColumn}=b.sub_aggregate_column AND ratio > CAST({parameter1} AS FLOAT) " \
@@ -240,12 +251,14 @@ class RunRuleEngineSpecialRule(object):
                   "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_TEMP_FACT_1 ON COMMIT PRESERVE ROWS AS " \
                   "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ retailer_key,vendor_key,OSM_MAJOR_CATEGORY " \
                   "FROM ( SELECT retailer_key,vendor_key,OSM_MAJOR_CATEGORY, " \
-                  "             ROW_NUMBER() OVER (PARTITION BY retailer_key,vendor_key ORDER BY totalExpectedLostSalesAmount DESC) idx " \
+                  "             ROW_NUMBER() OVER (PARTITION BY retailer_key,vendor_key " \
+                  "                                ORDER BY totalExpectedLostSalesAmount DESC) idx " \
                   "       FROM ( SELECT a.retailer_key,a.vendor_key,OSM_MAJOR_CATEGORY, " \
                   "                     SUM(ExpectedLostSalesAmount) totalExpectedLostSalesAmount " \
                   "              FROM  {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} a " \
                   "              INNER JOIN ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET b " \
-                  "              ON a.{providerBaseTablePkColumn} = b.id AND a.vendor_key = b.vendor_key AND a.retailer_key = b.retailer_key " \
+                  "              ON a.{providerBaseTablePkColumn} = b.id AND a.vendor_key = b.vendor_key " \
+                  "              AND a.retailer_key = b.retailer_key " \
                   "              AND a.InterventionKey IN ({interventionKeyList}) " \
                   "              AND (b.reject_reasons IS NULL OR b.reject_reasons ='' " \
                   "                   OR b.reject_reasons LIKE '%clear reject reason caused by pick up rule)' " \
@@ -261,7 +274,8 @@ class RunRuleEngineSpecialRule(object):
             self._dw_connection.execute(sql)
 
             sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
-                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP ON COMMIT PRESERVE ROWS AS " \
+                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
+                  "ON COMMIT PRESERVE ROWS AS " \
                   "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ a.retailer_key,a.vendor_key,a.incidentid AS id " \
                   "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET a " \
                   "LEFT JOIN ANL_RULE_ENGINE_TEMP_FACT_1 b " \
@@ -297,20 +311,22 @@ class RunRuleEngineSpecialRule(object):
 
             print("Period (range) to check for already issued rule is: %s" % sql_period_clause)
 
-            sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COALESCE(MAX(period_key),20010101) FROM ANL_RULE_ENGINE_STAGE_FACT;"
+            sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COALESCE(MAX(period_key),20010101) " \
+                  "FROM ANL_RULE_ENGINE_STAGE_FACT;"
             period_key_of_current_batch = self._dw_connection.query_scalar(sql)[0]
-            sql= "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
-                 "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP ON COMMIT PRESERVE ROWS AS " \
-                 "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ current.vendor_key vendor_key, " \
-                 "      current.retailer_key retailer_key, current.IncidentID as id " \
-                 "FROM {schemaName}.olap_store s " \
-                 "INNER JOIN {schemaName}.ANL_FACT_OSM_INCIDENTS current " \
-                 "ON s.retailer_key = current.retailer_key AND s.store_key = current.store_key AND s.{parameter3} " \
-                 "INNER JOIN {schemaName}.ANL_FACT_OSM_INCIDENTS pre " \
-                 "ON current.itemnumber = pre.itemnumber AND current.storeid = pre.storeid " \
-                 "AND pre.issuanceid = 0 AND {sqlPeriodClause} AND current.period_key = {periodKeyOfCurrentBatch}"\
+            sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
+                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
+                  "ON COMMIT PRESERVE ROWS AS " \
+                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ current.vendor_key vendor_key, " \
+                  "      current.retailer_key retailer_key, current.IncidentID as id " \
+                  "FROM {schemaName}.olap_store s " \
+                  "INNER JOIN {schemaName}.ANL_FACT_OSM_INCIDENTS current " \
+                  "ON s.retailer_key = current.retailer_key AND s.store_key = current.store_key AND s.{parameter3} " \
+                  "INNER JOIN {schemaName}.ANL_FACT_OSM_INCIDENTS pre " \
+                  "ON current.itemnumber = pre.itemnumber AND current.storeid = pre.storeid " \
+                  "AND pre.issuanceid = 0 AND {sqlPeriodClause} AND current.period_key = {periodKeyOfCurrentBatch}"\
                 .format(schemaName=self._schema_name,
-                        sqlPeriodClause= sql_period_clause,
+                        sqlPeriodClause=sql_period_clause,
                         periodKeyOfCurrentBatch=period_key_of_current_batch,
                         parameter3=_parameter3)
             print(sql)
@@ -322,7 +338,8 @@ class RunRuleEngineSpecialRule(object):
         # IZS alert count per store
         if rule_id == 55:
             sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ InterventionKey " \
-                  "FROM {schemaName}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION WHERE AlertType='IZS'".format(schemaName=self._schema_name)
+                  "FROM {schemaName}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION WHERE AlertType='IZS'"\
+                .format(schemaName=self._schema_name)
             _izs_intervention_key_list = ""
             for row in self._dw_connection.query_with_result(sql):
                 _izs_intervention_key_list = _izs_intervention_key_list + str(row['INTERVENTIONKEY']) + ","
@@ -331,10 +348,12 @@ class RunRuleEngineSpecialRule(object):
             print(_izs_intervention_key_list)
 
             sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
-                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP ON COMMIT PRESERVE ROWS AS " \
+                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
+                  "ON COMMIT PRESERVE ROWS AS " \
                   "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ retailer_key,vendor_key,id " \
                   "FROM ( SELECT a.retailer_key,a.vendor_key,b.id," \
-                  "              ROW_NUMBER() OVER (PARTITION BY a.storeid ORDER BY a.rank_value_after_calculation DESC NULLS LAST) idx " \
+                  "              ROW_NUMBER() OVER (PARTITION BY a.storeid " \
+                  "              ORDER BY a.rank_value_after_calculation DESC NULLS LAST) idx " \
                   "       FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET a " \
                   "       INNER JOIN ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET b " \
                   "       ON a.{providerBaseTablePkColumn}=b.id AND a.vendor_key = b.vendor_key " \
@@ -392,15 +411,17 @@ class RunRuleEngineSpecialRule(object):
             print(sql_depts)
 
             sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
-                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP ON COMMIT PRESERVE ROWS AS " \
+                  "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
+                  "ON COMMIT PRESERVE ROWS AS " \
                   "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ a.retailer_key,a.vendor_key,a.id " \
                   "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_PHANTOM_ALERT_DEPT a " \
                   "LEFT JOIN (SELECT retailer_key, vendor_key, id " \
-                  "           FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY store_key ORDER BY rank_value_after_calculation DESC NULLS LAST) idx " \
-                  "                  FROM (SELECT b.* FROM ({sqlDepts}) a " \
-                  "                        INNER JOIN {schemaName}.ANL_RULE_ENGINE_STAGE_PHANTOM_ALERT_DEPT b " \
-                  "                        ON a.retailer_key = b.retailer_key AND a.major_category = b.major_category " \
-                  "                        AND a.store_key = b.store_key) x" \
+                  "           FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY store_key " \
+                  "                           ORDER BY rank_value_after_calculation DESC NULLS LAST) idx " \
+                  "                 FROM (SELECT b.* FROM ({sqlDepts}) a " \
+                  "                       INNER JOIN {schemaName}.ANL_RULE_ENGINE_STAGE_PHANTOM_ALERT_DEPT b " \
+                  "                       ON a.retailer_key = b.retailer_key AND a.major_category = b.major_category " \
+                  "                       AND a.store_key = b.store_key) x" \
                   "           ) y WHERE idx <= {parameter1}) b " \
                   "ON a.retailer_key = b.retailer_key AND a.vendor_key = b.vendor_key AND a.id = b.id " \
                   "WHERE b.id IS NULL".format(sqlDepts=sql_depts, schemaName=self._schema_name, parameter1=_parameter1)
@@ -435,7 +456,9 @@ class RunRuleEngineSpecialRule(object):
                 else:
                     _temp_column = " {subLevelMetrics} as sub_level, ".format(subLevelMetrics=_sub_level_metrics)
                     _sql_temp = self._get_sub_level_filter.get_sql(provider_sub_type, rule_id, rule_set_id, 'sub_level',
-                                                                   'idx > parameter1', _metrics_reject_reason, _filter_name)
+                                                                   'idx > parameter1',
+                                                                   _metrics_reject_reason,
+                                                                   _filter_name)
                 print(_sql_temp)
                 sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_TEMP_FACT_1; " \
                       "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_TEMP_FACT_1 ON COMMIT PRESERVE ROWS AS " \
@@ -456,13 +479,17 @@ class RunRuleEngineSpecialRule(object):
                 self._dw_connection.execute(sql)
 
                 sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
-                      "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP ON COMMIT preserve ROWS as " \
+                      "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
+                      "ON COMMIT PRESERVE ROWS AS " \
                       "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ retailer_key,vendor_key,id " \
                       "FROM (SELECT retailer_key,vendor_key,id,group_column,sub_level,idx ,{sqltemp} " \
-                      "       FROM (SELECT *,ROW_NUMBER() OVER (PARTITION BY group_column,sub_level ORDER BY order_column DESC) idx " \
+                      "       FROM (SELECT *,ROW_NUMBER() OVER (PARTITION BY group_column,sub_level " \
+                      "                                         ORDER BY order_column DESC) idx " \
                       "              FROM ANL_RULE_ENGINE_TEMP_FACT_1) x " \
                       ")y WHERE \"RULE:{providerSubType} {filterName}\" <> '1';" \
-                    .format(sqltemp=_sql_temp, providerSubType=provider_sub_type, filterName=_filter_name)
+                    .format(sqltemp=_sql_temp,
+                            providerSubType=provider_sub_type,
+                            filterName=_filter_name)
                 print(sql)
                 self._dw_connection.execute(sql)
                 self._update_target.update_target_table(_metrics_reject_reason)
@@ -470,6 +497,6 @@ class RunRuleEngineSpecialRule(object):
         print("-------------- Calling RunRuleEngineSpecialRule class end--------------\n")
 
 if __name__ == '__main__':
-    special = RunRuleEngineSpecialRule('PEPSI_AHOLD_MB', 'HUB_FUNCTION_MB')
+    special = RunRuleEngineSpecialRule('PEPSI_AHOLD_MB', 'HUB_FUNCTION_MB', '')
     # special.process(rule_set_id, rule_id, provider_sub_type, silo_type, silo_id, intervention_key_list, hub_id):
-    special.update_target_table('200132', 32, '*', 'S', 'PEPSI_AHOLD_MB', '1,2,3,4,5,6')
+    special.special_rule_processing('200132', 32, '*', '1,2,3,4,5,6')

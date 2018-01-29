@@ -12,7 +12,8 @@ class GetInterventionKeyList(object):
         Return related intervention keys according to alert types from UI.
 
         :param type_list: Alert Types, e.g. 'IZS, Shelf OOS, Chronic OOS, DC Push' or '*'
-        :return: key list: Getting related keys from table ANL_DIM_OSM_INTERVENTIONCLASSIFICATION. if * then return all keys
+        :return: key list: Getting related keys from table ANL_DIM_OSM_INTERVENTIONCLASSIFICATION.
+                            if * then return all keys
         """
         _list = self.__process(type_list)
         return _list
@@ -45,8 +46,7 @@ class GetInterventionKeyList(object):
 
 
 if __name__ == '__main__':
-    get_key = GetInterventionKeyList('PEPSI_AHOLD_MB','TNV,D-Void,Shelf OOS,Phantom,Forced Count,IZS,AA','HUB_FUNCTION_MB')
+    get_key = GetInterventionKeyList('param1', 'param2')
     # get_key = GetInterventionKeyList('PEPSI_AHOLD_MB', '*', 'HUB_FUNCTION_MB')
-    list = get_key.process()
-    print(list)
-
+    lst = get_key.getting_intervention_key_list('TNV,D-Void,Shelf OOS,Phantom,Forced Count,IZS,AA')
+    print(lst)

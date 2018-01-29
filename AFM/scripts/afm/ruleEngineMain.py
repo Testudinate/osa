@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+# coding=utf-8
+
 
 from RunRuleEngine import RunRuleEngine
 from common.DBOperation import DWAccess
@@ -6,7 +8,7 @@ from common.DBOperation import APPAccess
 
 
 class RuleEngineMain(object):
-    def __init__(self, vendor_key, retailer_key, silo_type, *, force_rerun=False, period_key=False):
+    def __init__(self, vendor_key, retailer_key, silo_type, *, force_rerun=False, period_key=None):
         self._vendor_key = vendor_key
         self._retailer_key = retailer_key
         self._dw_connection = DWAccess()
@@ -54,7 +56,7 @@ class RuleEngineMain(object):
         return _context
 
     def _getting_alerts_info(self):
-        if self._period_key:    # if AG pass period_key, then use this period_key
+        if self._period_key is not None:    # if AG pass period_key, then use this period_key
             # "Alert Generation" will update this meta table ANL_META_RAW_ALERTS_SEQ.
             sql = "SELECT MAX(seq_num) FROM ANL_META_RAW_ALERTS_SEQ " \
                   "WHERE vendor_key = {0} AND retailer_key = {1} AND alert_day = {2}"\
@@ -80,13 +82,12 @@ class RuleEngineMain(object):
             print(sql)
             return _period_key, _seq_num
 
-
     def main_process(self):
         self._run_rule_engine.rule_process()
 
 if __name__ == '__main__':
     try:
-        runRule = RuleEngineMain('55', '267', 'SVR', period_key=20170801, force_rerun=True)  # for VENDOR: PEPSI retailer: AHOLD
+        runRule = RuleEngineMain('55', '267', 'SVR', force_rerun=False)  # for VENDOR: PEPSI retailer: AHOLD
         # runRule = RuleEngineMain('5', '267', 'SVR')  # for VENDOR: ULEVER retailer: AHOLD
         # runRule = RuleEngineMain('5439', '15', 'SVR')     # for target retailer
         print(runRule._context)

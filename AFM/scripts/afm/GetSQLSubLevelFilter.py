@@ -20,13 +20,16 @@ class GetSQLSubLevelFilter(object):
         :param filter_name:
         :return:
         """
-        sql = self.__process(provider_subtype, rule_id, rule_set_id, sub_level_column, condition, reject_reason, filter_name)
+        sql = self.__process(provider_subtype, rule_id, rule_set_id,
+                             sub_level_column, condition, reject_reason, filter_name)
         return sql
 
-    def __process(self, provider_subtype, rule_id, rule_set_id, sub_level_column, condition, reject_reason, filter_name):
-        print("\n-------------- Calling GetSQLSubLevelFilter class --------------")
-        # return SQL for sub level filter
+    def __process(self, provider_subtype, rule_id, rule_set_id,
+                  sub_level_column, condition, reject_reason, filter_name):
 
+        print("\n-------------- Calling GetSQLSubLevelFilter class --------------")
+
+        # return SQL for sub level filter
         _sqlToReturn = ""
         sql = "SELECT /*+label(GX_OSM_RULE_ENGINE)*/ * FROM {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{suffix} " \
               "WHERE rule_id={ruleId} and rule_set_id={ruleSetID} AND SUB_LEVEL_CATEGORY <> 'Alert Type' "\

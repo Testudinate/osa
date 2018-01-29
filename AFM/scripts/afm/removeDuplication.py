@@ -17,7 +17,8 @@ class RemoveDuplication(object):
             CREATE TABLE {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_DUPLICATION{suffix} as
             SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ vendor_key, retailer_key, incidentid as id
             FROM (SELECT a.vendor_key, a.retailer_key, a.incidentid,
-                        ROW_NUMBER() OVER (PARTITION BY a.itemnumber, a.store_key ORDER BY a.Priority asc, rank_value_after_calculation desc) idx
+                        ROW_NUMBER() OVER (PARTITION BY a.itemnumber, a.store_key
+                        ORDER BY a.Priority asc, rank_value_after_calculation desc) idx
                  FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} a
                  INNER JOIN ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET b
                  ON a.vendor_key = b.vendor_key
@@ -84,6 +85,6 @@ class RemoveDuplication(object):
 
 
 if __name__ == '__main__':
-    rd = RemoveDuplication('test','test')
+    rd = RemoveDuplication('test', 'test')
     rd.remove_duplication()
     rd.remove_duplication_final()

@@ -8,14 +8,13 @@ from GetInterventionkeyList import *
 from RunRuleEngineSpecialRule import *
 from UpdateAlertTable import *
 from UpdateTargetTable import *
-# from common.DBOperation import *
 from removeDuplication import *
 
 
 class RunRuleEngine(object):
 
     def __init__(self, dw_conn, app_conn, context):
-        # self._dw_connection = DWAccess()
+        # self._dw_connection = DWAccess()      # unit test
         self._dw_connection = dw_conn
         self._app_connection = app_conn
         self._context = context
@@ -30,9 +29,9 @@ class RunRuleEngine(object):
         # self._log = Log() # to be coded
         # self._config = Config() # to be coded
         # self._SQLEngine = SQLEngine() # to be coded
-        self._check_rule_engine = None
+        self._check_rule_engine = None  # initial via eval
         # self._gen_stage_data = GenRuleEngineStageData(self._schema_name, self._silo_db_name, self._hub_id)
-        self._gen_stage_data = None
+        self._gen_stage_data = None     # # initial via eval
         self._get_intervention_keys = GetInterventionKeyList(self._dw_connection, self._context)
         self._run_special_rule = RunRuleEngineSpecialRule(self._dw_connection, self._app_connection, self._context)
         self._get_sublevel_filter = GetSQLSubLevelFilter(self._dw_connection, self._app_connection, self._context)
@@ -149,9 +148,11 @@ class RunRuleEngine(object):
                     already_removed_duplication = False
                     _rule_set_name = rule_set['RULE_SET_NAME']
                     _owner = rule_set['OWNER']
-                    sql = "SELECT silo_id, type " \
-                          "FROM #TMP_ANL_RULE_ENGINE_STAGE_COMMON_1 " \
-                          "WHERE RULE_SET_NAME = '{ruleSetName}' ".format(ruleSetName=_rule_set_name)
+
+                    # silo_id & type are no longer needed
+                    # sql = "SELECT silo_id, type " \
+                    #       "FROM #TMP_ANL_RULE_ENGINE_STAGE_COMMON_1 " \
+                    #       "WHERE RULE_SET_NAME = '{ruleSetName}' ".format(ruleSetName=_rule_set_name)
                     # _row = self._app_connection.query_with_result(sql)[0]
                     # SVR silo id, could be multi ones.different from parameter silo_id
                     # _silo_id = _row['SILO_ID']
@@ -173,7 +174,8 @@ class RunRuleEngine(object):
                     _store_scope = _row['STORE_SCOPE']
                     _type_list = _row['TYPES_LIST']
                     print(_rule_set_id, _item_scope, _store_scope, _type_list)
-                    msg="Working on rule set id rule_set_id whose name is %s - in progress" % _rule_set_name
+                    msg = "Working on rule set id rule_set_id whose name is %s - in progress" \
+                          % _rule_set_name
                     print(msg)
                     # Write-Log $sqlConn "rule engine" 99999 $msg $inProgress
 
@@ -182,7 +184,8 @@ class RunRuleEngine(object):
                     _row_exists = self._dw_connection.query_scalar(sql)[0]
                     if _row_exists == 0:
                         msg = "There is no data to be processed for (Vendor: %s Retailer: %s) , " \
-                              "Since table of ANL_RULE_ENGINE_STAGE_FACT is empty - INFO" % (self._vendor_key, self._retailer_key)
+                              "Since table of ANL_RULE_ENGINE_STAGE_FACT is empty - INFO" \
+                              % (self._vendor_key, self._retailer_key)
                         print(msg)
                         # Write-Log $sqlConn "rule engine" 99999 $msg 'INFO'
 
@@ -219,30 +222,28 @@ class RunRuleEngine(object):
                     #     sql += "AND DSD_IND=0 "
 
                     if _item_scope != '':
-                        sql += " AND UPC IN (SELECT VALUE FROM {schemaName}.ANL_RULE_ENGINE_STAGE_RULE_LIST " \
-                                    "WHERE FILE_ID = '{itemScope}') ".format(schemaName=self._schema_name,
-                                                                             itemScope=_item_scope)
+                        sql += " AND UPC IN (SELECT VALUE FROM ANL_RULE_ENGINE_STAGE_RULE_LIST " \
+                                    "WHERE FILE_ID = '{itemScope}') ".format(itemScope=_item_scope)
                         sql_dummy = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) " \
-                                    "FROM (SELECT * FROM {schemaName}.ANL_RULE_ENGINE_STAGE_RULE_LIST " \
-                                    "WHERE FILE_ID = '{itemScope}' LIMIT 1) x ".format(schemaName=self._schema_name,
-                                                                                       itemScope=_item_scope)
+                                    "FROM (SELECT * FROM ANL_RULE_ENGINE_STAGE_RULE_LIST " \
+                                    "WHERE FILE_ID = '{itemScope}' LIMIT 1) x ".format(itemScope=_item_scope)
                         _row_exists = self._dw_connection.query_scalar(sql_dummy)[0]
                         if _row_exists == 0:
-                            msg = "Rule set of %s has item scope set, but the scope is empty - WARNING" % (_rule_set_name)
+                            msg = "Rule set of %s has item scope set, but the scope is empty - WARNING" \
+                                  % _rule_set_name
                             print(msg)
                             # Write-Log $sqlConn "rule engine" 99999 $msg $warning
 
                     if _store_scope != '':
-                        sql += "AND STOREID IN (SELECT VALUE FROM {schemaName}.ANL_RULE_ENGINE_STAGE_RULE_LIST " \
-                                "WHERE FILE_ID = '{storeScope}') ".format(schemaName=self._schema_name,
-                                                                          storeScope=_store_scope)
+                        sql += "AND STOREID IN (SELECT VALUE FROM ANL_RULE_ENGINE_STAGE_RULE_LIST " \
+                                "WHERE FILE_ID = '{storeScope}') ".format(storeScope=_store_scope)
                         sql_dummpy = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) FROM " \
-                                     "(SELECT * FROM {schemaName}.ANL_RULE_ENGINE_STAGE_RULE_LIST " \
-                                     " WHERE FILE_ID = '{storeScope}' LIMIT 1) x".format(schemaName=self._schema_name,
-                                                                                         storeScope=_store_scope)
+                                     "(SELECT * FROM ANL_RULE_ENGINE_STAGE_RULE_LIST " \
+                                     " WHERE FILE_ID = '{storeScope}' LIMIT 1) x".format(storeScope=_store_scope)
                         _row_exists = self._dw_connection.query_scalar(sql_dummpy)[0]
                         if _row_exists == 0:
-                            msg = "Rule set of %s has store scope set, but the scope is empty - WARNING" % _rule_set_name
+                            msg = "Rule set of %s has store scope set, but the scope is empty - WARNING" \
+                                  % _rule_set_name
                             print(msg)
                             # Write-Log $sqlConn "rule engine" 99999 $msg $warning
                     print(sql)
@@ -252,13 +253,14 @@ class RunRuleEngine(object):
                     print(_intervention_key_list)
 
                     if _provider_name == 'AFM' and _type_list != '':
-                        sql += "AND interventionkey in ({interventionKeyList}) ".format(interventionKeyList=_intervention_key_list)
+                        sql += "AND interventionkey in ({interventionKeyList}) "\
+                            .format(interventionKeyList=_intervention_key_list)
 
                     # NXG-18237: no need to re-process duplicated alert.
-                    # (e.g. alert silo rules rejected those alerts as duplicated. no need to re-process in SVR silo rules)
+                    # e.g. alert silo rules rejected those alerts as duplicated. no need to re-process in SVR silo rules
                     sql += "AND ((c.owner IS NULL OR c.owner='') " \
                            "      AND NVL(reject_reasons,'') NOT LIKE '%duplicated alert%') UNSEGMENTED ALL NODES;"
-                    print("SQL of creating table ANL_RULE_ENGINE_STAGE_FACT_RULE_SET%s is: \n %s" % (self._suffix, sql) )
+                    print("SQL of creating table ANL_RULE_ENGINE_STAGE_FACT_RULE_SET%s is: \n %s" % (self._suffix, sql))
                     self._dw_connection.execute(sql)
 
                     _stage_table = "{schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix}"\
@@ -280,7 +282,8 @@ class RunRuleEngine(object):
                               "HAVING COUNT(*) > 1 LIMIT 10 ".format(stage_table=_stage_table)
                         result = self._dw_connection.query_with_result(sql)
                         msg = "Duplication Found:"
-                        print("There are duplicated alerts, please check alert table, some examples are: %s" % result[0])
+                        print("There are duplicated alerts, please check alert table, some examples are: %s"
+                              % result[0])
                         for row in result:
                             _vendor_key = row['VENDOR_KEY']
                             _retailer_key = row['RETAILER_KEY']
@@ -301,11 +304,11 @@ class RunRuleEngine(object):
                           "FROM (SELECT * FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} LIMIT 1) x"\
                         .format(schemaName=self._schema_name, suffix=self._suffix)
                     if self._dw_connection.query_scalar(sql)[0] == 0:
-                        msg = "There is no data to be processed for (Vendor: {VENDOR_KEY}, Retailer: {RETAILER_KEY}), " \
+                        msg = "There is no data to be processed for (Vendor: {VENDOR}, Retailer: {RETAILER}), " \
                               "rule set of {ruleSetName} " \
                               "Since table of {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} is empty - WARNING"\
-                            .format(VENDOR_KEY=self._vendor_key,
-                                    RETAILER_KEY = self._retailer_key,
+                            .format(VENDOR=self._vendor_key,
+                                    RETAILER=self._retailer_key,
                                     ruleSetName=_rule_set_name,
                                     schemaName=self._schema_name,
                                     suffix=self._suffix)
@@ -374,13 +377,17 @@ class RunRuleEngine(object):
                             _rule_id = rule['RULE_ID']
                             _rule_set_id = rule['RULE_SET_ID']
                             _rule_action_type = rule['RULE_ACTION_TYPE']
-                            msg = "Working on filter whose name is '{filterName}' - in progress".format(filterName=_filter_name)
+                            msg = "Working on filter whose name is '{filterName}' - in progress"\
+                                .format(filterName=_filter_name)
                             # Write-Log $sqlConn "rule engine" 99999 $msg $inProgress
                             print(msg)
 
-                            print("_metrics_condition", _metrics_condition, '_metrics_reject_reason', _metrics_reject_reason, '_parameter1', _parameter1,
+                            print("_metrics_condition", _metrics_condition, '_metrics_reject_reason',
+                                  _metrics_reject_reason, '_parameter1', _parameter1,
                                   '_parameter2 : ', _parameter2, "_parameter3 is :", _parameter3,
-                                  "_provider_sub_type :", _provider_sub_type, "_sub_level_metrics: ", _sub_level_metrics, '_rule_id :', _rule_id, _rule_set_id)
+                                  "_provider_sub_type :", _provider_sub_type, "_sub_level_metrics: ",
+                                  _sub_level_metrics, '_rule_id :', _rule_id, _rule_set_id)
+
                             _intervention_key_list = self._get_intervention_keys.getting_intervention_key_list(_provider_sub_type)
                             print(_intervention_key_list)
 
@@ -399,12 +406,14 @@ class RunRuleEngine(object):
                             if _metrics_type.lower() == "Value Filter".lower():
                                 if _sub_level_metrics == '':
                                     print("1 _sql_tmp is : ", _metrics_condition)
-                                    _sql_tmp = _metrics_condition.lower().replace('parameter1',str(_parameter1))
+                                    _sql_tmp = _metrics_condition.lower().replace('parameter1', str(_parameter1))
                                     _sql_tmp = _sql_tmp.replace('parameter2', str(_parameter2))
-                                    _sql_tmp = _sql_tmp.replace('parameter3',str(_parameter3))
+                                    _sql_tmp = _sql_tmp.replace('parameter3', str(_parameter3))
                                     print("1 _sql_tmp is : ", _sql_tmp)
-                                    _sql_tmp = " WHEN {AlertType_place_holder}".format(AlertType_place_holder=_sql_tmp1) + _sql_tmp + \
+                                    _sql_tmp = " WHEN {AlertType_place_holder}".format(AlertType_place_holder=_sql_tmp1) \
+                                               + _sql_tmp + \
                                                " THEN '{metricsRejectReason}' ELSE '1'".format(metricsRejectReason=_metrics_reject_reason)
+
                                     # _sql_tmp = _sql_tmp.replace("AlertType_place_holder", _sql_tmp1)
                                     _sql_tmp = ' CASE ' + _sql_tmp + ' END "RULE:{providerSubType} {filterName}" '\
                                         .format(providerSubType=_provider_sub_type, filterName=_filter_name)
@@ -415,9 +424,15 @@ class RunRuleEngine(object):
                                         _sql_tmp1 = _sql_tmp1 + _metrics_condition.lower().replace("parameter2", str(_parameter2))
                                     else:
                                         _sql_tmp1 = _sql_tmp1 + _metrics_condition
-                                    print("1 _sql_tmp is : ", _sql_tmp1, '_metrics_reject_reason :', _metrics_reject_reason, "_filter_name : ", _filter_name)
-                                    _sql_tmp = self._get_sublevel_filter.get_sql(_provider_sub_type, _rule_id, _rule_set_id,
-                                                                                 _sub_level_metrics, _sql_tmp1, _metrics_reject_reason, _filter_name)
+                                    print("1 _sql_tmp is : ", _sql_tmp1, '_metrics_reject_reason :',
+                                          _metrics_reject_reason, "_filter_name : ", _filter_name)
+                                    _sql_tmp = self._get_sublevel_filter.get_sql(_provider_sub_type,
+                                                                                 _rule_id,
+                                                                                 _rule_set_id,
+                                                                                 _sub_level_metrics,
+                                                                                 _sql_tmp1,
+                                                                                 _metrics_reject_reason,
+                                                                                 _filter_name)
 
                                 print(_sql_tmp)
                                 print("3 final sqltmp is : ", _sql_tmp)
@@ -427,12 +442,14 @@ class RunRuleEngine(object):
 
                             msg = "Working on filter whose name is {filterName} - completed".format(filterName=_filter_name)
                             # Write-Log $sqlConn "rule engine" 99999 $msg $completed
+                            print(msg)
                             _sql_concat = _sql_concat + _sql_tmp + ","
                             print("_sql_concat is: ", _sql_concat)
 
                         if _metrics_type.lower() == "Value Filter".lower():
                             _sql_concat = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_PROCESSING_ORDER; " \
-                                          "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_PROCESSING_ORDER ON COMMIT PRESERVE ROWS AS " \
+                                          "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_PROCESSING_ORDER "\
+                                          "ON COMMIT PRESERVE ROWS AS " \
                                           "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ vendor_key,retailer_key," \
                                           " incidentid as id, {sub_sqlconcat} " \
                                           "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} "\
@@ -450,8 +467,9 @@ class RunRuleEngine(object):
 
                             _tmp_array = []
                             for column in _column_set:
-                                _column_name =column['COLUMN_NAME']
-                                _tmp_array.append(" CASE WHEN \"{columnName}\" = '1' THEN '' ELSE \"{columnName}\"||',' END".format(columnName=_column_name))
+                                _column_name = column['COLUMN_NAME']
+                                _tmp_array.append(" CASE WHEN \"{columnName}\" = '1' THEN '' ELSE \"{columnName}\"||',' END"
+                                                  .format(columnName=_column_name))
 
                             _sql_reject_reason = "||".join(_tmp_array)
                             print("sql reject reason is:", _sql_reject_reason)
@@ -462,7 +480,8 @@ class RunRuleEngine(object):
                                   "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ vendor_key,retailer_key,id," \
                                   "SUBSTRING(temp_reject_reasons,0,length(temp_reject_reasons)) as reject_reasons " \
                                   "FROM (SELECT vendor_key,retailer_key,id,{sqlRejectReason} AS temp_reject_reasons " \
-                                  "         FROM ANL_RULE_ENGINE_STAGE_FACT_TARGET_PROCESSING_ORDER )x ".format(sqlRejectReason=_sql_reject_reason)
+                                  "         FROM ANL_RULE_ENGINE_STAGE_FACT_TARGET_PROCESSING_ORDER )x "\
+                                .format(sqlRejectReason=_sql_reject_reason)
                             print(sql)
                             self._dw_connection.execute(sql)
 
@@ -487,20 +506,22 @@ class RunRuleEngine(object):
                           "WHERE reject_reasons is not null and reject_reasons <> ''".format(ruleSetName=_rule_set_name)
                     self._dw_connection.execute(sql)
 
-                    # use 'N' instead of using "CASE WHEN '{siloType}'='A' THEN 'Y' ELSE 'N' END". cuz there is no alert silo here.
+                    # Using 'N' instead of using "CASE WHEN '{siloType}'='A' THEN 'Y' ELSE 'N' END" for the last column.
+                    # Because there is no alert silo anymore.
                     sql = """INSERT /*+ DIRECT, label(GX_OSM_RULE_ENGINE)*/ INTO ANL_RULE_ENGINE_STAGE_FACT_TARGET
                        (vendor_key,retailer_key,id,reject_reasons,owner,is_alert_portal_rule_set)
                         SELECT vendor_key,retailer_key,id,reject_reasons,
                                CASE WHEN reject_reasons IS NULL OR reject_reasons = ''
-                               OR reject_reasons LIKE '%clear reject reason caused by pick up rule)' THEN '{owner}' ELSE NULL END,
-
+                                         OR reject_reasons LIKE '%clear reject reason caused by pick up rule)'
+                               THEN '{owner}' ELSE NULL END,
                                'N'
                          FROM ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET""".format(owner=_owner)
                     print(sql)
                     self._dw_connection.execute(sql)
 
                     sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) FROM ANL_RULE_ENGINE_STAGE_FACT_TARGET"
-                    print("There are %s rows in table of ANL_RULE_ENGINE_STAGE_FACT_TARGET" % self._dw_connection.query_scalar(sql)[0])
+                    print("There are %s rows in table of ANL_RULE_ENGINE_STAGE_FACT_TARGET"
+                          % self._dw_connection.query_scalar(sql)[0])
 
                     msg = "Working on rule set id %s whose name is %s: completed" % (_rule_set_id, _rule_set_name)
                     print(msg)
@@ -523,9 +544,6 @@ class RunRuleEngine(object):
                     # Write-Log $sqlConn "rule engine" 99999 $msg $error
                     exit(1)
 
-                # self._dw_connection.execute("drop table if exists PEPSI_AHOLD_MB.ANL_RULE_ENGINE_STAGE_FACT_TARGET11")
-                # self._dw_connection.execute("create table PEPSI_AHOLD_MB.ANL_RULE_ENGINE_STAGE_FACT_TARGET11 as select * from ANL_RULE_ENGINE_STAGE_FACT_TARGET")
-
                 # double check: we should not have one alert with multiple owner set
                 sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) FROM " \
                       "(SELECT COUNT(*) FROM ANL_RULE_ENGINE_STAGE_FACT_TARGET " \
@@ -543,9 +561,11 @@ class RunRuleEngine(object):
                 sql = """DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_FINAL;
                    CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_FINAL ON COMMIT PRESERVE ROWS AS
                    SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ x.*,y.owner
-                   FROM ( SELECT id,vendor_key,retailer_key, case when reject_reasons ='' THEN NULL ELSE reject_reasons END AS reject_reasons
-                          FROM (select id,vendor_key,retailer_key,
-                          GROUP_CONCAT(reject_reasons) OVER (PARTITION BY id,vendor_key,retailer_key ORDER BY reject_reasons asc) AS reject_reasons
+                   FROM ( SELECT id,vendor_key,retailer_key,
+                                 CASE WHEN reject_reasons ='' THEN NULL ELSE reject_reasons END AS reject_reasons
+                          FROM (SELECT id,vendor_key,retailer_key,
+                                       GROUP_CONCAT(reject_reasons) OVER (PARTITION BY id,vendor_key,retailer_key
+                                       ORDER BY reject_reasons asc) AS reject_reasons
                         FROM ANL_RULE_ENGINE_STAGE_FACT_TARGET) temp
                    ) x
                    INNER JOIN
@@ -558,7 +578,8 @@ class RunRuleEngine(object):
                 self._remove_duplication.remove_duplication_final()
 
                 if _data_provider_post_processing_function != '':
-                    msg = "Working on data provider post process, function name is: %s - in progress" % _data_provider_post_processing_function
+                    msg = "Working on data provider post process, function name is: %s - in progress" \
+                          % _data_provider_post_processing_function
                     print(msg)
                     # Write-Log $sqlConn "rule engine" 99999 $msg $inProgress
                     self._update_alert_table.update_alert_table()
@@ -569,6 +590,7 @@ class RunRuleEngine(object):
                 # Write-Log $sqlConn "rule engine" 99999 $msg $completed
 
         except Exception as e:
+            print(e)
             raise
         finally:
             self._dw_connection.close_conn()
@@ -576,7 +598,7 @@ class RunRuleEngine(object):
 
 
 if __name__ == '__main__':
-    # run_rule = RunRuleEngine('ben_osa_retailer','ben_osa_retailer','ben_osa_retailer', 'ENGV2HSDBQA1.ENG.RSICORP.LOCAL\DB5','ALERT')
+    # run_rule = RunRuleEngine('ben_osa_retailer','ben_osa_retailer', 'ben_osa_retailer', )
     # __init__(self, silo_id, schema_name, silo_db_name, silo_server_name, silo_type, suffix):
     run_rule = RunRuleEngine('dw_conn', 'app_conn', 'suffix')
     run_rule.rule_process()

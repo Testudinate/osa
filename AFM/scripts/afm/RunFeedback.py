@@ -1,8 +1,8 @@
 
 class RunFeedback(object):
-# param($verticaConn,$sqlConn,$hubConn,$schemaName,$hubID,$inaccurateAlertsDys,$notInPlanogramDays,$trueAlertDays,$ruleSetId,$ruleID,$siloID='')
-# param($verticaConn,$sqlConn,$hubConn,$schemaName,$hubID,$inaccurateAlertsDys,$notInPlanogramDays,$trueAlertDays,$ruleSetId,$ruleID,$siloID)
-    def __init__(self, conn, app_conn, context, inaccurate_alerts_dys, not_in_planogram_days, true_alert_days, rule_set_id, rule_id):
+
+    def __init__(self, conn, app_conn, context, inaccurate_alerts_dys, not_in_planogram_days,
+                 true_alert_days, rule_set_id, rule_id):
         self.dw_connection = conn
         self.app_connection = app_conn
         self._context = context
@@ -14,7 +14,6 @@ class RunFeedback(object):
         self._true_alert_days = true_alert_days
         self._rule_set_id = rule_set_id
         self._rule_id = rule_id
-        # self._silo_id = silo_id
 
     def processing_feedback(self):
         """
@@ -34,14 +33,15 @@ class RunFeedback(object):
                                    "DROP TABLE IF EXISTS {schemaName}.ANL_RULE_ENGINE_STAGE_SUB_LEVEL_FILTER_1{suffix}"
                                    .format(schemaName=self._schema_name, suffix=self._suffix))
 
-        sql="CREATE TABLE {schemaName}.ANL_RULE_ENGINE_STAGE_SUB_LEVEL_FILTER_1{suffix} " \
-            "( SUB_LEVEL_VALUE VARCHAR(512)," \
-            "  alertType VARCHAR(512)," \
-            "  numdaystosuppress VARCHAR(10)" \
-            "); ".format(schemaName=self._schema_name, suffix=self._suffix)
+        sql = "CREATE TABLE {schemaName}.ANL_RULE_ENGINE_STAGE_SUB_LEVEL_FILTER_1{suffix} " \
+              "( SUB_LEVEL_VALUE VARCHAR(512)," \
+              "  alertType VARCHAR(512)," \
+              "  numdaystosuppress VARCHAR(10)" \
+              "); ".format(schemaName=self._schema_name, suffix=self._suffix)
         self.dw_connection.execute(sql)
 
-        sql="INSERT /*+ DIRECT, label(GX_OSM_RULE_ENGINE)*/ INTO {schemaName}.ANL_RULE_ENGINE_STAGE_SUB_LEVEL_FILTER_1{suffix} "\
+        sql="INSERT /*+ DIRECT, label(GX_OSM_RULE_ENGINE)*/ " \
+            "INTO {schemaName}.ANL_RULE_ENGINE_STAGE_SUB_LEVEL_FILTER_1{suffix} "\
             "SELECT SUB_LEVEL_VALUE, 'NotTrueAlert' alertType, METRICS_VALUE numdaystosuppress "\
             "FROM {schemaName}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{suffix} "\
             "WHERE rule_set_Id = {ruleSetId} AND rule_ID = {ruleID} and SUB_LEVEL_CATEGORY = 'Alert Type' "\
@@ -67,18 +67,20 @@ class RunFeedback(object):
                                                                        suffix=self._suffix)
         self.dw_connection.execute(sql)
 
-        sql="SELECT COUNT(*) FROM ANL_RULE_ENGINE_SUB_LEVEL_FILTER " \
-            "WHERE rule_set_Id = {ruleSetId} AND rule_ID = {ruleID} and SUB_LEVEL_VALUE IS NOT NULL " \
-            "AND SUB_LEVEL_CATEGORY = 'Alert Type';".format(schemaName=self._schema_name,
-                                                            ruleSetId=self._rule_set_id,
-                                                            ruleID=self._rule_id)
+        sql = "SELECT COUNT(*) FROM ANL_RULE_ENGINE_SUB_LEVEL_FILTER " \
+              "WHERE rule_set_Id = {ruleSetId} AND rule_ID = {ruleID} and SUB_LEVEL_VALUE IS NOT NULL " \
+              "AND SUB_LEVEL_CATEGORY = 'Alert Type';".format(schemaName=self._schema_name,
+                                                              ruleSetId=self._rule_set_id,
+                                                              ruleID=self._rule_id)
         _alert_type_enabled = self.app_connection.query_scalar(sql)[0]
+
         if _alert_type_enabled != 0:
             _sql_for_feedback = \
                 "SELECT fdbk.Store_Id, fdbk.vendor_key, fdbk.Inner_UPC, fdbk.STORE_VISIT_DATE, " \
-                "       fdbk.FEEDBACK_DESCRIPTION, COALESCE(sublevel.SUB_LEVEL_VALUE,'default') AS OSM_MAJOR_CATEGORY, " \
+                "     fdbk.FEEDBACK_DESCRIPTION, COALESCE(sublevel.SUB_LEVEL_VALUE,'default') AS OSM_MAJOR_CATEGORY, " \
                 "       fdbk.Merchandiser, fdbk.Retailer_Key, " \
-                "       ROW_NUMBER() OVER(PARTITION BY dim.AlertSubType, fdbk.Store_Id,fdbk.Inner_UPC ORDER BY STORE_VISIT_DATE desc) rn " \
+                "       ROW_NUMBER() OVER(PARTITION BY dim.AlertSubType, fdbk.Store_Id,fdbk.Inner_UPC " \
+                "                         ORDER BY STORE_VISIT_DATE desc) rn " \
                 "FROM {schemaName}.ANL_FACT_FEEDBACK fdbk " \
                 "INNER JOIN {schemaName}.ANL_FACT_ALERTS alert " \
                 "ON fdbk.ALERT_ID = alert.IncidentID and fdbk.RETAILER_KEY = alert.RETAILER_KEY " \
@@ -91,19 +93,23 @@ class RunFeedback(object):
                 "WHERE alert.VENDOR_KEY = {VENDOR_KEY}".format(schemaName=self._schema_name,
                                                                ruleSetId=self._rule_set_id,
                                                                ruleID=self._rule_id,
-                                                               VENDOR_KEY=self._vendor_key)
+                                                               VENDOR_KEY=self._vendor_key,
+                                                               suffix=self._suffix)
         else:
-            _sql_for_feedback = "SELECT fdbk.Store_Id, fdbk.vendor_key, fdbk.Inner_UPC, fdbk.STORE_VISIT_DATE, fdbk.FEEDBACK_DESCRIPTION, " \
-                             "       'default' as OSM_MAJOR_CATEGORY, fdbk.Merchandiser,fdbk.Retailer_Key, " \
-                             "       ROW_NUMBER() OVER(PARTITION BY fdbk.Store_Id,fdbk.Inner_UPC ORDER BY fdbk.STORE_VISIT_DATE desc) rn " \
-                             "FROM {schemaName}.ANL_FACT_FEEDBACK fdbk " \
-                             "WHERE fdbk.source != 'ARIA' or fdbk.source IS NULL".format(schemaName=self._schema_name)
+            _sql_for_feedback = "SELECT fdbk.Store_Id, fdbk.vendor_key, fdbk.Inner_UPC, " \
+                                "       fdbk.STORE_VISIT_DATE, fdbk.FEEDBACK_DESCRIPTION, " \
+                                "       'default' as OSM_MAJOR_CATEGORY, fdbk.Merchandiser,fdbk.Retailer_Key, " \
+                                "       ROW_NUMBER() OVER(PARTITION BY fdbk.Store_Id,fdbk.Inner_UPC " \
+                                "                         ORDER BY fdbk.STORE_VISIT_DATE desc) rn " \
+                                "FROM {schemaName}.ANL_FACT_FEEDBACK fdbk " \
+                                "WHERE fdbk.source != 'ARIA' or fdbk.source IS NULL".format(schemaName=self._schema_name)
 
         print(_sql_for_feedback)
 
         sql = "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_RULE_ENGINE_STAGE_SUB_LEVEL_FILTER_1{suffix}'); "\
               "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_DIM_FEEDBACK_ASSUMPTIONS'); "\
-              "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_FACT_FEEDBACK');".format(schemaName=self._schema_name, suffix=self._suffix)
+              "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_FACT_FEEDBACK');"\
+            .format(schemaName=self._schema_name, suffix=self._suffix)
         self.dw_connection.execute(sql)
 
         sql="CREATE TABLE {schemaName}.ANL_RULE_ENGINE_AFM_FEEDBACK_STAGE{suffix} AS " \

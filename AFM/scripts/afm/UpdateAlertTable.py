@@ -51,28 +51,31 @@ class UpdateAlertTable(object):
                                                         VENDOR_KEY=self._vendor_key,
                                                         suffix=self._suffix)
         print(sql)
-        self._dw_connection.execute(sql)
+        # self._dw_connection.execute(sql)
 
-        _target_table_name='ANL_FACT_ALERT'
+        _stage_table_name = 'ANL_FACT_ALERT_SWAP_STAGING{suffix}'.format(suffix=self._suffix)
+        _target_table_name = 'ANL_FACT_ALERT'
         # all alert tables are having the same columns with table ANL_FACT_ALERT_TEMPLATE
         sql = "SELECT column_name FROM columns WHERE table_name='ANL_FACT_ALERT' " \
               "AND table_schema='{schemaName}'".format(schemaName=self._schema_name)
         _column_array = self._dw_connection.query_with_result(sql)
-        insert_alert_columns = ','.join(["i.\"" + _column['COLUMN_NAME'] + "\"" for _column in _column_array])
-        print(insert_alert_columns)
-        insert_alert_columns = insert_alert_columns.replace('i."IssuanceId"', "(CASE WHEN ft.OWNER IS NOT NULL AND ft.OWNER <> '' THEN 0 ELSE IssuanceId END) AS IssuanceId")
-        insert_alert_columns = insert_alert_columns.replace('i."OWNER"', 'NVL(ft.OWNER,i.Owner) AS Owner')
-        insert_alert_columns = insert_alert_columns.replace('i."RejectReasons"', 'NVL(ft.reject_reasons,i.RejectReasons) AS RejectReasons')
-        insert_alert_columns = insert_alert_columns.replace('i."ALERT_ID"', 'IncidentID as ALERT_ID')
-        insert_alert_columns = insert_alert_columns.replace('i."NUMBER_OF_FACINGS"', 'NULL AS NUMBER_OF_FACINGS')
-        insert_alert_columns = insert_alert_columns.replace('i."POG_DESCRIPTION"', 'NULL AS POG_DESCRIPTION')
-        insert_alert_columns = insert_alert_columns.replace('i."POG_LOCATION"', 'NULL AS POG_LOCATION')
-        insert_alert_columns = insert_alert_columns.replace('i."FIRST_PUBLISH_DATE_PERIOD_KEY"', "to_number(to_char(FirstPublishDate,'YYYYMMDD')) AS FIRST_PUBLISH_DATE_PERIOD_KEY")
-        insert_alert_columns = insert_alert_columns.replace('i."LAST_PUBLISH_DATE_PERIOD_KEY"', "to_number(to_char(LastPublishDate,'YYYYMMDD')) AS LAST_PUBLISH_DATE_PERIOD_KEY")
-        print(insert_alert_columns)
+        insert_columns = ','.join(["i.\"" + _column['COLUMN_NAME'] + "\"" for _column in _column_array])
+        print(insert_columns)
+        insert_columns = insert_columns.replace('i."IssuanceId"',
+                                                "(CASE WHEN ft.OWNER IS NOT NULL AND ft.OWNER <> '' THEN 0 ELSE IssuanceId END) AS IssuanceId")
+        insert_columns = insert_columns.replace('i."OWNER"', 'NVL(ft.OWNER,i.Owner) AS Owner')
+        insert_columns = insert_columns.replace('i."RejectReasons"',
+                                                'NVL(ft.reject_reasons,i.RejectReasons) AS RejectReasons')
+        insert_columns = insert_columns.replace('i."ALERT_ID"', 'IncidentID as ALERT_ID')
+        insert_columns = insert_columns.replace('i."NUMBER_OF_FACINGS"', 'NULL AS NUMBER_OF_FACINGS')
+        insert_columns = insert_columns.replace('i."POG_DESCRIPTION"', 'NULL AS POG_DESCRIPTION')
+        insert_columns = insert_columns.replace('i."POG_LOCATION"', 'NULL AS POG_LOCATION')
+        insert_columns = insert_columns.replace('i."FIRST_PUBLISH_DATE_PERIOD_KEY"',
+                                                "to_number(to_char(FirstPublishDate,'YYYYMMDD')) AS FIRST_PUBLISH_DATE_PERIOD_KEY")
+        insert_columns = insert_columns.replace('i."LAST_PUBLISH_DATE_PERIOD_KEY"',
+                                                "to_number(to_char(LastPublishDate,'YYYYMMDD')) AS LAST_PUBLISH_DATE_PERIOD_KEY")
+        print(insert_columns)
 
-        # _vendor_key = 55
-        # suffix = customer.suffix
         sql = "SELECT /*+label(GX_OSM_AFM)*/ COUNT(*) cnt FROM tables " \
               "WHERE table_name='{tableName}' AND table_schema='{schemaName}'"\
             .format(tableName=_target_table_name, schemaName=self._schema_name)
@@ -110,7 +113,6 @@ class UpdateAlertTable(object):
         # Table partitions are not supported for temporary tables.
         # So create a staging table with same structure to store previous days of data for the same vendor.
         # since we are not going to touch target table directly instead of using swap_partition.
-        _stage_table_name = 'ANL_FACT_ALERT_SWAP_STAGING{suffix}'.format(suffix=self._suffix)
         sql = "DROP TABLE IF EXISTS {schema_name}.{stage_table}; " \
               "CREATE TABLE {schema_name}.{stage_table} LIKE {schema_name}.{target_table}"\
             .format(schema_name=self._schema_name,
@@ -131,6 +133,7 @@ class UpdateAlertTable(object):
                     stage_table=_stage_table_name)
         print(sql)
         self._dw_connection.execute(sql)
+
         # delete issued alerts on the same day if re-run AFM
         sql = "DELETE FROM {schema_name}.{table_name} " \
               "WHERE vendor_key = {vendor_key} AND period_key = {period_key} "\
@@ -157,7 +160,7 @@ class UpdateAlertTable(object):
             AND (CASE WHEN ft.owner IS NOT NULL AND ft.owner <> '' THEN 0 ELSE issuanceid END) = 0"""\
             .format(schemaName=self._schema_name,
                     stage_table=_stage_table_name,
-                    target_table_columns=insert_alert_columns,
+                    target_table_columns=insert_columns,
                     period_key=self._period_key,
                     seq_num=self._seq_num,
                     vendor_key=self._vendor_key,

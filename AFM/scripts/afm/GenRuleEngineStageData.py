@@ -58,24 +58,26 @@ class GenRuleEngineStageData(object):
         insert_alert_columns = ",".join(all_columns_list)
         insert_alert_columns = insert_alert_columns.replace('a."UPC"', 'c.UPC')
         insert_alert_columns = insert_alert_columns.replace('a."STOREID"', 'd.STORE_ID as STOREID')
-        insert_alert_columns = insert_alert_columns.replace('a."MAJOR_CATEGORY_NO"', 'c.OSM_MAJOR_CATEGORY_NO as MAJOR_CATEGORY_NO')
-        insert_alert_columns = insert_alert_columns.replace('a."MAJOR_CATEGORY"', 'c.OSM_MAJOR_CATEGORY as MAJOR_CATEGORY')
+        insert_alert_columns = insert_alert_columns.replace('a."MAJOR_CATEGORY_NO"',
+                                                            'c.OSM_MAJOR_CATEGORY_NO as MAJOR_CATEGORY_NO')
+        insert_alert_columns = insert_alert_columns.replace('a."MAJOR_CATEGORY"',
+                                                            'c.OSM_MAJOR_CATEGORY as MAJOR_CATEGORY')
         print(insert_alert_columns)
 
         # <2016-11-16 by Hong>
         # Remove IF-ELSE block as OSM_ITEM_NBR always exists in OLAP_ITEM_OSM
-        sql_for_pre_table = "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_PRE ON COMMIT PRESERVE ROWS AS " \
-              "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ {insertAlertColumns}, AlertType, b.AlertSubType, " \
-              "       b.Priority, c.osm_item_nbr AS item_nbr, {interventionKeyCaseWhenSQL} " \
-              "FROM {schemaName}.anl_fact_osm_incidents a " \
-              "INNER JOIN {schemaName}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION b " \
-              "ON a.InterventionKey = b.InterventionKey " \
-              "INNER JOIN {schemaName}.olap_item_osm c " \
-              "ON a.vendor_key = c.vendor_key AND a.item_key = c.item_key " \
-              "INNER JOIN {schemaName}.olap_store d " \
-              "ON a.retailer_key = d.retailer_key AND a.store_key = d.store_key " \
-              "WHERE Period_Key = {maxinitialday} AND a.InterventionKey <> 1" \
-              "AND a.vendor_key = {vendorKey} and seq_num = {seq_num} ;"\
+        sql_pre_table = "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_PRE ON COMMIT PRESERVE ROWS AS " \
+                        "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ {insertAlertColumns}, AlertType, b.AlertSubType, " \
+                        "       b.Priority, c.osm_item_nbr AS item_nbr, {interventionKeyCaseWhenSQL} " \
+                        "FROM {schemaName}.anl_fact_osm_incidents a " \
+                        "INNER JOIN {schemaName}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION b " \
+                        "ON a.InterventionKey = b.InterventionKey " \
+                        "INNER JOIN {schemaName}.olap_item_osm c " \
+                        "ON a.vendor_key = c.vendor_key AND a.item_key = c.item_key " \
+                        "INNER JOIN {schemaName}.olap_store d " \
+                        "ON a.retailer_key = d.retailer_key AND a.store_key = d.store_key " \
+                        "WHERE Period_Key = {maxinitialday} AND a.InterventionKey <> 1" \
+                        "AND a.vendor_key = {vendorKey} and seq_num = {seq_num} ;"\
             .format(insertAlertColumns=insert_alert_columns,
                     interventionKeyCaseWhenSQL=_intervention_key_case_when_sql,
                     schemaName=self._schema_name,
@@ -84,7 +86,7 @@ class GenRuleEngineStageData(object):
                     seq_num=self._seq_num)
 
         self._dw_connection.execute("DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_PRE")
-        self._dw_connection.execute(sql_for_pre_table)
+        self._dw_connection.execute(sql_pre_table)
         # tmp_result = self.dw_connection.query_with_result("select * from ANL_RULE_ENGINE_STAGE_FACT_PRE")
         sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ COUNT(*) FROM ANL_RULE_ENGINE_STAGE_FACT_PRE"
         __row_cnt = self._dw_connection.query_scalar(sql)[0]
@@ -92,7 +94,7 @@ class GenRuleEngineStageData(object):
             print("There is no data to be processed for period_key:{0} & seq_num{1}."
                   "Please check below SQL:\n{2}".format(self._max_initial_day,
                                                         self._seq_num,
-                                                        sql_for_pre_table))
+                                                        sql_pre_table))
             exit(1)
 
         print("There are %d in table of ANL_RULE_ENGINE_STAGE_FACT_PRE" % __row_cnt)
@@ -104,12 +106,12 @@ class GenRuleEngineStageData(object):
         _need_to_rename = self._dw_connection.query_scalar(sql)[0]
 
         if _need_to_rename == 1:
-            sql="CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT ON COMMIT PRESERVE ROWS AS " \
-                "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ *,MAJOR_CATEGORY as OSM_MAJOR_CATEGORY " \
-                "FROM ANL_RULE_ENGINE_STAGE_FACT_PRE"
+            sql = "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT ON COMMIT PRESERVE ROWS AS " \
+                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ *,MAJOR_CATEGORY as OSM_MAJOR_CATEGORY " \
+                  "FROM ANL_RULE_ENGINE_STAGE_FACT_PRE"
         else:
-            sql="CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT ON COMMIT PRESERVE ROWS AS " \
-                "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ * AS FROM ANL_RULE_ENGINE_STAGE_FACT_PRE"
+            sql = "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT ON COMMIT PRESERVE ROWS AS " \
+                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ * AS FROM ANL_RULE_ENGINE_STAGE_FACT_PRE"
 
         self._dw_connection.execute(sql)
 
@@ -117,22 +119,24 @@ class GenRuleEngineStageData(object):
         print("There are %d in table of ANL_RULE_ENGINE_STAGE_FACT" % (self._dw_connection.query_scalar(sql)[0]))
 
         # for advantage feedback, only consider the alert whose upc/store are in the upcmapping/storemapping list
-        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ CASE WHEN MAX(period_key) IS NULL THEN -1 ELSE MAX(period_key) END " \
+        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ " \
+              "       CASE WHEN MAX(period_key) IS NULL THEN -1 ELSE MAX(period_key) END " \
               "FROM {schemaName}.ANL_FACT_FEEDBACK WHERE type='U' AND vendor_key = {VENDOR_KEY};"\
             .format(schemaName=self._schema_name,
                     VENDOR_KEY=self._vendor_key)
-        loadIDForUPCMapping = self._dw_connection.query_scalar(sql)[0]
-        print("loadIDForUPCMapping is: ", loadIDForUPCMapping)
+        loadid_for_upc_mapping = self._dw_connection.query_scalar(sql)[0]
+        print("loadIDForUPCMapping is: ", loadid_for_upc_mapping)
 
-        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ CASE WHEN MAX(period_key) IS NULL THEN -1 ELSE MAX(period_key) END " \
+        sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ " \
+              "       CASE WHEN MAX(period_key) IS NULL THEN -1 ELSE MAX(period_key) END " \
               "FROM {schemaName}.ANL_FACT_FEEDBACK WHERE type='S' AND vendor_key = {VENDOR_KEY};"\
             .format(schemaName=self._schema_name,
                     VENDOR_KEY=self._vendor_key)
-        loadIDForstoreMapping = self._dw_connection.query_scalar(sql)[0]
-        print("loadIDForstoreMapping is: ", loadIDForstoreMapping)
+        load_id_for_store_mapping = self._dw_connection.query_scalar(sql)[0]
+        print("loadIDForstoreMapping is: ", load_id_for_store_mapping)
 
         # TODO : also need to confirm below logic
-        if loadIDForUPCMapping != -1 and loadIDForstoreMapping != -1:
+        if loadid_for_upc_mapping != -1 and load_id_for_store_mapping != -1:
             print("Processing advantage feedback")
             if self._retailer_name.lower() == 'target'.lower():
                 print('target retailer:')
@@ -157,8 +161,8 @@ class GenRuleEngineStageData(object):
                       "WHERE alerts.storeid = store.store_id " \
                       "AND right(repeat('0',20)||alerts.TGT_UPC,20) = right(repeat('0',20)||upc.UPC,20)"\
                     .format(schemaName=self._schema_name,
-                            loadIDForstoreMapping=loadIDForstoreMapping,
-                            loadIDForUPCMapping=loadIDForUPCMapping,
+                            loadIDForstoreMapping=load_id_for_store_mapping,
+                            loadIDForUPCMapping=loadid_for_upc_mapping,
                             VENDOR_KEY=self._vendor_key)
                 self._dw_connection.execute(sql)
             else:
@@ -167,7 +171,8 @@ class GenRuleEngineStageData(object):
                 self._dw_connection.execute(sql)
                 sql = "CREATE LOCAL TEMPORARY TABLE ANL_RULE_ENGINE_STAGE_FACT_TEMP1 ON COMMIT PRESERVE ROWS AS " \
                       "SELECT alerts.* " \
-                      "FROM ( SELECT *, CASE WHEN alertupc IS NULL OR alertupc = '' THEN upc ELSE alertupc END true_UPC " \
+                      "FROM ( SELECT *, CASE WHEN alertupc IS NULL OR alertupc = '' " \
+                      "                 THEN upc ELSE alertupc END true_UPC " \
                       "       FROM ANL_RULE_ENGINE_STAGE_FACT ) alerts , " \
                       "     ( SELECT DISTINCT right(repeat('0',20)||Inner_UPC,20) as upc " \
                       "       FROM {schemaName}.ANL_FACT_FEEDBACK " \
@@ -177,19 +182,20 @@ class GenRuleEngineStageData(object):
                       "       WHERE period_key = {loadIDForstoreMapping} AND vendor_key = {VENDOR_KEY}) store " \
                       "WHERE alerts.storeid = store.store_id AND right(repeat('0',20)||alerts.true_UPC,20) = upc.UPC"\
                     .format(schemaName=self._schema_name,
-                            loadIDForUPCMapping=loadIDForUPCMapping,
-                            loadIDForstoreMapping=loadIDForstoreMapping,
+                            loadIDForUPCMapping=loadid_for_upc_mapping,
+                            loadIDForstoreMapping=load_id_for_store_mapping,
                             VENDOR_KEY=self._vendor_key)
                 self._dw_connection.execute(sql)
 
-            sql="DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT"
+            sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT"
             self._dw_connection.execute(sql)
-            sql="CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT ON COMMIT PRESERVE ROWS AS " \
-                "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ * FROM ANL_RULE_ENGINE_STAGE_FACT_TEMP1"
+
+            sql = "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT ON COMMIT PRESERVE ROWS AS " \
+                  "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ * FROM ANL_RULE_ENGINE_STAGE_FACT_TEMP1"
             self._dw_connection.execute(sql)
 
         print("-------------- Calling GenRuleEngineStageData class ended--------------\n")
 
 if __name__ == '__main__':
-    gen_stage = GenRuleEngineStageData('PEPSI_AHOLD_MB', 'HUB_FUNCTION_MB')
-    gen_stage.process()
+    gen_stage = GenRuleEngineStageData('', '', 'context')
+    gen_stage.gen_stage_table()

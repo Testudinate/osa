@@ -50,7 +50,7 @@ class RunRuleEngineSpecialRule(object):
             pass
             # . "$PSScriptRoot\RunFeedbackAlert.ps1"
 
-        self._dw_connection.execute("drop table if exists {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_3"
+        self._dw_connection.execute("DROP TABLE IF EXISTS {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_3"
                                     .format(schemaName=self._schema_name))
         sql = "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ " \
               "CASE WHEN parameter1 IS NULL THEN '' ELSE parameter1 END AS parameter1, " \
@@ -88,7 +88,7 @@ class RunRuleEngineSpecialRule(object):
         # print(_provider_row, type(_provider_row))
         _provider_pk_column = _provider_row['PROVIDER_BASE_TABLE_PK_COLUMN']
 
-        if _metrics_type == 'store-alertType filter':
+        if _metrics_type.lower() == 'store-alertType filter'.lower():
             sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
                   "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
                   "ON COMMIT PRESERVE ROWS AS " \

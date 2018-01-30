@@ -26,7 +26,8 @@ class GetInterventionKeyList(object):
 
         # if _type_list = '*', then retrieving all intervention keys.
         if type_list == '*':
-            sql = "SELECT interventionkey FROM {SCHEMA_NAME}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION;"\
+            sql = "SELECT interventionkey FROM {SCHEMA_NAME}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION " \
+                  "ORDER BY 1;"\
                 .format(SCHEMA_NAME=self._schema_name)
             _intervention_keys = self._dw_connection.query_with_result(sql)
 
@@ -34,7 +35,8 @@ class GetInterventionKeyList(object):
         else:
             sql = "SELECT interventionkey FROM {SCHEMA_NAME}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION " \
                   "WHERE alerttype IN ({TYPE_LIST}) " \
-                  "OR AlertSubType IN ({TYPE_LIST});".format(SCHEMA_NAME=self._schema_name, TYPE_LIST=_in_type_list)
+                  "OR AlertSubType IN ({TYPE_LIST}) ORDER BY 1;"\
+                .format(SCHEMA_NAME=self._schema_name, TYPE_LIST=_in_type_list)
             print(sql)
             _intervention_keys = self._dw_connection.query_with_result(sql)
             

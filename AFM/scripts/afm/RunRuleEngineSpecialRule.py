@@ -277,11 +277,12 @@ class RunRuleEngineSpecialRule(object):
                   "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
                   "ON COMMIT PRESERVE ROWS AS " \
                   "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ a.retailer_key,a.vendor_key,a.incidentid AS id " \
-                  "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET a " \
+                  "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} a " \
                   "LEFT JOIN ANL_RULE_ENGINE_TEMP_FACT_1 b " \
                   "ON a.retailer_key=b.retailer_key AND a.vendor_key=b.vendor_key " \
                   "AND COALESCE(a.OSM_MAJOR_CATEGORY,'')=COALESCE(b.OSM_MAJOR_CATEGORY,'') " \
-                  "WHERE b.vendor_key IS NULL".format(schemaName=self._schema_name)
+                  "WHERE b.vendor_key IS NULL".format(schemaName=self._schema_name,
+                                                      suffix=self._suffix)
             print(sql)
             self._dw_connection.execute(sql)
             self._update_target.update_target_table(_metrics_reject_reason)
@@ -354,7 +355,7 @@ class RunRuleEngineSpecialRule(object):
                   "FROM ( SELECT a.retailer_key,a.vendor_key,b.id," \
                   "              ROW_NUMBER() OVER (PARTITION BY a.storeid " \
                   "              ORDER BY a.rank_value_after_calculation DESC NULLS LAST) idx " \
-                  "       FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET a " \
+                  "       FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} a " \
                   "       INNER JOIN ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET b " \
                   "       ON a.{providerBaseTablePkColumn}=b.id AND a.vendor_key = b.vendor_key " \
                   "       AND a.retailer_key = b.retailer_key " \
@@ -363,6 +364,7 @@ class RunRuleEngineSpecialRule(object):
                   "            OR b.reject_reasons like '%clear reject reason caused by pick up rule)' " \
                   "            OR b.reject_reasons like '%clear reject reason caused by pick up rule') " \
                   ") y WHERE y.idx > {parameter1}".format(schemaName=self._schema_name,
+                                                          suffix=self._suffix,
                                                           providerBaseTablePkColumn=_provider_pk_column,
                                                           izsInterventionKeyList=_izs_intervention_key_list,
                                                           parameter1=_parameter1)
@@ -388,7 +390,7 @@ class RunRuleEngineSpecialRule(object):
                   "CREATE TABLE {schemaName}.ANL_RULE_ENGINE_STAGE_PHANTOM_ALERT_DEPT as " \
                   "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ a.retailer_key, a.vendor_key, b.id, a.MAJOR_CATEGORY, " \
                   "       a.store_key, a.rank_value_after_calculation " \
-                  "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET a " \
+                  "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} a " \
                   "INNER JOIN ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET b " \
                   "ON a.{providerBaseTablePkColumn}=b.id and a.vendor_key = b.vendor_key " \
                   "AND a.retailer_key = b.retailer_key AND a.InterventionKey in ({phantomInterventionKeyList}) " \
@@ -396,6 +398,7 @@ class RunRuleEngineSpecialRule(object):
                   "     OR b.reject_reasons LIKE '%clear reject reason caused by pick up rule)' " \
                   "     OR b.reject_reasons LIKE '%clear reject reason caused by pick up rule') " \
                   "SEGMENTED BY HASH(ID) ALL NODES".format(schemaName=self._schema_name,
+                                                           suffix=self._suffix,
                                                            providerBaseTablePkColumn=_provider_pk_column,
                                                            phantomInterventionKeyList=_phantom_intervention_key_list)
             print(sql)
@@ -464,7 +467,7 @@ class RunRuleEngineSpecialRule(object):
                       "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_TEMP_FACT_1 ON COMMIT PRESERVE ROWS AS " \
                       "SELECT a.retailer_key,a.vendor_key,b.id,a.{parameter2} group_column, " \
                       "       {tempColumn} a.{parameter3} order_column " \
-                      "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET a " \
+                      "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} a " \
                       "INNER JOIN ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET b " \
                       "ON a.{providerBaseTablePkColumn}=b.id AND a.vendor_key = b.vendor_key " \
                       "AND a.retailer_key = b.retailer_key AND a.InterventionKey IN ({interventionKeyList}) " \
@@ -473,6 +476,7 @@ class RunRuleEngineSpecialRule(object):
                       "     OR b.reject_reasons LIKE '%clear reject reason caused by pick up rule');"\
                     .format(parameter2=_parameter2, tempColumn=_temp_column,
                             parameter3=_parameter3, schemaName=self._schema_name,
+                            suffix=self._suffix,
                             providerBaseTablePkColumn=_provider_pk_column,
                             interventionKeyList=intervention_key_list)
                 print(sql)

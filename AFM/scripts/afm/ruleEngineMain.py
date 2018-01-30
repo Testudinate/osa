@@ -73,7 +73,9 @@ class RuleEngineMain(object):
                   "SELECT *, ROW_NUMBER() OVER(PARTITION BY vendor_key, retailer_key " \
                   "          ORDER BY alert_day DESC, seq_num DESC) idx " \
                   "FROM [ANL_META_RAW_ALERTS_SEQ] ) x  " \
-                  "WHERE idx = 1"
+                  "WHERE idx = 1 and vendor_key  = {vendor_key} " \
+                  "and retailer_key = {retailer_key}".format(vendor_key=self._vendor_key,
+                                                             retailer_key=self._retailer_key)
             _period_key = self._app_connection.query_scalar(sql)[0]
             _seq_num = self._app_connection.query_scalar(sql)[1]
 
@@ -87,7 +89,7 @@ class RuleEngineMain(object):
 
 if __name__ == '__main__':
     try:
-        runRule = RuleEngineMain('55', '267', 'SVR', force_rerun=False)  # for VENDOR: PEPSI retailer: AHOLD
+        runRule = RuleEngineMain('5', '267', 'SVR', force_rerun=False)  # for VENDOR: PEPSI retailer: AHOLD
         # runRule = RuleEngineMain('5', '267', 'SVR')  # for VENDOR: ULEVER retailer: AHOLD
         # runRule = RuleEngineMain('5439', '15', 'SVR')     # for target retailer
         print(runRule._context)

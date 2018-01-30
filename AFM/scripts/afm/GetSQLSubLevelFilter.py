@@ -57,7 +57,7 @@ class GetSQLSubLevelFilter(object):
             loop_times += 1
         print("Returned SQL is: ", _sqlToReturn)
 
-        sql = "SELECT /*+label(GX_OSM_RULE_ENGINE)*/ * FROM #TMP_ANL_RULE_ENGINE_STAGE_RULES " \
+        sql = "SELECT * FROM #TMP_ANL_RULE_ENGINE_STAGE_RULES " \
               "WHERE rule_id={ruleId} AND rule_set_id={ruleSetID}"\
             .format(ruleId=rule_id, ruleSetID=rule_set_id, suffix=self._suffix)
         print(sql)

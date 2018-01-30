@@ -66,10 +66,6 @@ class CheckRuleEngine(object):
         print(source_sql)
         self._sync_data.sync_table_with_sql(source_sql, 'ANL_RULE_ENGINE_SUB_LEVEL_FILTER{0}'.format(self._suffix))
 
-        rows = self._dw_connection.query_with_result("SELECT * FROM {0}.ANL_RULE_ENGINE_SUB_LEVEL_FILTER{1}"
-                                                     .format(self._schema_name, self._suffix))
-        print(rows)
-
         # sync table ANL_RULE_ENGINE_UPC_STORE_LIST from SqlServer to Vertica
         sql = "DROP TABLE IF EXISTS {schemaName}.ANL_RULE_ENGINE_UPC_STORE_LIST{suffix}; " \
               "CREATE TABLE IF NOT EXISTS {schemaName}.ANL_RULE_ENGINE_UPC_STORE_LIST{suffix} AS " \
@@ -94,9 +90,9 @@ class CheckRuleEngine(object):
         print(source_sql)
         self._sync_data.sync_table_with_sql(source_sql, 'ANL_RULE_ENGINE_UPC_STORE_LIST{0}'.format(self._suffix))
 
-        rows = self._dw_connection.query_with_result("SELECT * FROM {0}.ANL_RULE_ENGINE_UPC_STORE_LIST{1}"
-                                                     .format(self._schema_name, self._suffix))
-        print(rows)
+        # rows = self._dw_connection.query_with_result("SELECT * FROM {0}.ANL_RULE_ENGINE_UPC_STORE_LIST{1}"
+        #                                              .format(self._schema_name, self._suffix))
+        # print(rows)
 
     def __process(self):
         print("\n-------------- Calling CheckRuleEngine class --------------")

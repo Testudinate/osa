@@ -62,7 +62,7 @@ class UpdateAlertTable(object):
         print(insert_columns)
         insert_columns = insert_columns.replace('i."IssuanceId"',
                                                 "(CASE WHEN ft.OWNER IS NOT NULL AND ft.OWNER <> '' THEN 0 ELSE IssuanceId END) AS IssuanceId")
-        insert_columns = insert_columns.replace('i."OWNER"', 'NVL(ft.OWNER,i.Owner) AS Owner')
+        insert_columns = insert_columns.replace('i."Owner"', 'NVL(ft.Owner, i.Owner) AS Owner')
         insert_columns = insert_columns.replace('i."RejectReasons"',
                                                 'NVL(ft.reject_reasons,i.RejectReasons) AS RejectReasons')
         insert_columns = insert_columns.replace('i."ALERT_ID"', 'IncidentID as ALERT_ID')

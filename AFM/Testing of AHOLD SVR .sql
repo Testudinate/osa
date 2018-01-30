@@ -2,6 +2,7 @@
 用ahold的数据来测试AFM：(silo: ahold, period_key: 20180128)
 Copy 所有 alert_ahold 下面的 svr silo 里面的数据到测试库。 alert_ahold silo下面一共有69个svr silos。
 1, copy 69 个silo上面的 anl_fact_osm_incidents 表里面的数据到QA环境里面的 osa_ahold_ben schema.
+   这里要注意update表里面的几个字段. Owner to NULL, Issuanceid to 1, RejectReasons to NULL. 
 2, copy olap_item_osm & olap_store 到上面的QA Vertica环境。
 3, 从alert silo 上面copy下面几个表到 osa_ahold_ben SqlServer 数据库
 	select * from ALERT_AHOLD.ANL_RULE_ENGINE_META_DATA_PROVIDERS;

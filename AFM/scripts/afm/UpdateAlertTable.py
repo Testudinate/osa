@@ -34,8 +34,7 @@ class UpdateAlertTable(object):
         print(sql)
         self._dw_connection.execute(sql)
 
-        sql = "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_FACT_OSM_INCIDENTS'); " \
-              "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_RULE_ENGINE_STAGE_FACT_TARGET_FINAL{suffix}');"\
+        sql = "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_RULE_ENGINE_STAGE_FACT_TARGET_FINAL{suffix}');"\
             .format(schemaName=self._schema_name,
                     suffix=self._suffix)
         print(sql)

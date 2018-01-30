@@ -173,3 +173,4 @@ Scorecard job will also need to sync feedback as well.
 ---------------------------------3, 
 remove all prints and uneccessary debug code
 change the connection string and adding logs
+remove analyze_statistics for those common used tables(e.g. anl_fact_osm_incidents)

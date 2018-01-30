@@ -107,8 +107,6 @@ class RunFeedback(object):
         print(_sql_for_feedback)
 
         sql = "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_RULE_ENGINE_STAGE_SUB_LEVEL_FILTER_1{suffix}'); "\
-              "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_DIM_FEEDBACK_ASSUMPTIONS'); "\
-              "SELECT ANALYZE_STATISTICS('{schemaName}.ANL_FACT_FEEDBACK');"\
             .format(schemaName=self._schema_name, suffix=self._suffix)
         self.dw_connection.execute(sql)
 

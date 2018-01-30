@@ -19,18 +19,16 @@ Copy 所有 alert_ahold 下面的 svr silo 里面的数据到测试库。 alert_
 --CD D:\OneDrive\program\OSA_SUITE\AFM\scripts\afm & D: 
 CD C:\Ben\python\osa\AFM\scripts\afm
 python.exe -c "from ruleEngineMain import *; runRule = RuleEngineMain('113', '267', 'SVR'); runRule.main_process()"
-
 5	--done
 6	--done
 15	--done
 23	--done
 33	--done
-52	--error. rule 
+52	--error. rule 	--这两个失败的原因是因为有多个rule_set, 记录在问题5里面
 55	--error. duplicated
 110	--done
 112	--done
 113	--done
-
 
 6, 比较 QA和PRO上面的 ANL_FACT_ALERT 表的结果
 
@@ -43,8 +41,11 @@ python.exe -c "from ruleEngineMain import *; runRule = RuleEngineMain('113', '26
    ruleid: 13, 14, 16, 17, 18
    参考后面的sql
 4, 导数据的时候没有清掉olap_item_osm的数据，导致有重复记录 (item_key)
-
-
+5, 因为之前的PowerShell是先把4个rule_engine表都同步到vertica里面在进行计算的。
+   所以这里务必要保证，所有用到那4个表的地方都加上了之前同步脚本里面的逻辑，外加自己的逻辑
+6, 结果不大一致，主要是因为没有 sync anl_fact_feedback table
+7, 不要同时分析公用的表, 去掉相关的分析函数
+pyodbc.Error: ('55V04', '[55V04] ERROR 2083:  A Analyze Statistics operation is already in progress on projection OSA_AHOLD_BEN.ANL_DIM_FEEDBACK_ASSUMPTIONS_b0 [txnid 49539596868454305 session v_fusion_node0002-16732:0x20b3102]\n (2083) (SQLExecDirectW)')
 ----preparing data for step 1,2------
 SELECT count(*) FROM ALT_UNILEVER_AHOLD.ANL_FACT_OSM_INCIDENTS WHERE period_key = 20180128;     --87202
 SELECT count(*) FROM ALT_PHARMAVITE_AHOLD.ANL_FACT_OSM_INCIDENTS WHERE period_key = 20180128;   --1631
@@ -75,8 +76,10 @@ vsql -U ben.wu -d fusion -h PRODVERTICANXG7.PROD.RSICORP.LOCAL -w Bat.Pit.Pan-44
 
 vsql -U ben.wu -d fusion -h PRODVERTICANXG7.PROD.RSICORP.LOCAL -w Bat.Pit.Pan-444 -c "SELECT * FROM ALERT_AHOLD.OLAP_ITEM_OSM" -Atq -P footer=off -F '|' -o "OLAP_ITEM_OSM.txt"
 vsql -U ben.wu -d fusion -h PRODVERTICANXG7.PROD.RSICORP.LOCAL -w Bat.Pit.Pan-444 -c "SELECT * FROM ALERT_AHOLD.OLAP_STORE" -Atq -P footer=off -F '|' -o "OLAP_STORE.txt"
+vsql -U ben.wu -d fusion -h PRODVERTICANXG7.PROD.RSICORP.LOCAL -w Bat.Pit.Pan-444 -c "SELECT * FROM ALERT_AHOLD.ANL_FACT_FEEDBACK" -Atq -P footer=off -F '|' -o "ANL_FACT_FEEDBACK.txt"
 vsql -U ben.wu -d fusion -h QAVERTICANXG.ENG.RSICORP.LOCAL -w Bat.Pit.Pan-444 -c "COPY OSA_AHOLD_BEN.OLAP_ITEM_OSM_import FROM local 'OLAP_ITEM_OSM.txt' skip 0 delimiter E'|' trailing nullcols rejectmax 1000 REJECTED DATA 'rej.log' EXCEPTIONS 'err.log' --enable-connection-load-balance DIRECT no escape;"
 vsql -U ben.wu -d fusion -h QAVERTICANXG.ENG.RSICORP.LOCAL -w Bat.Pit.Pan-444 -c "COPY OSA_AHOLD_BEN.OLAP_STORE_import FROM local 'OLAP_STORE.txt' skip 0 delimiter E'|' trailing nullcols rejectmax 1000 REJECTED DATA 'rej.log' EXCEPTIONS 'err.log' --enable-connection-load-balance DIRECT no escape;"
+vsql -U ben.wu -d fusion -h QAVERTICANXG.ENG.RSICORP.LOCAL -w Bat.Pit.Pan-444 -c "COPY OSA_AHOLD_BEN.ANL_FACT_FEEDBACK_import FROM local 'ANL_FACT_FEEDBACK.txt' skip 0 delimiter E'|' trailing nullcols rejectmax 1000 REJECTED DATA 'rej.log' EXCEPTIONS 'err.log' --enable-connection-load-balance DIRECT no escape;"
 
 
 --loading

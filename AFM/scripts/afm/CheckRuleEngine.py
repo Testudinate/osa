@@ -39,9 +39,9 @@ class CheckRuleEngine(object):
         # getting associated rule_set_id of the given vendor & retailer to sync below 2 tables.
         sql = "SELECT rule_set_id FROM " \
               "(SELECT *,ROW_NUMBER() " \
-              "          OVER(PARTITION BY rule_set_name order by rule_set_id desc) AS idx " \
-              " FROM ANL_RULE_ENGINE_RULE_SET where vendor_key = {0} and retailer_key = {1}) tmp " \
-              "WHERE idx=1 AND enabled in ('T','Y')".format(self._vendor_key, self._retailer_key)
+              "          OVER(PARTITION BY rule_set_name ORDER BY rule_set_id DESC) AS idx " \
+              " FROM ANL_RULE_ENGINE_RULE_SET WHERE vendor_key = {0} AND retailer_key = {1}) tmp " \
+              "WHERE idx=1 AND enabled IN ('T','Y')".format(self._vendor_key, self._retailer_key)
         print(sql)
         rule_sets = self._app_connection.query_with_result(sql)
         rule_set_str = ','.join(str(rule_set["RULE_SET_ID"]) for rule_set in rule_sets)

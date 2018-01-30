@@ -16,22 +16,23 @@ Copy 所有 alert_ahold 下面的 svr silo 里面的数据到测试库。 alert_
 4, 稍微修改下上面几个表里面的配置信息根据新的表结构。
 
 5, 并行跑69个SVR vendors 相关的 AFM job
-CD D:\OneDrive\program\OSA_SUITE\AFM\scripts\afm & D: 
-python.exe -c "from ruleEngineMain import *; runRule = RuleEngineMain('5', '267', 'SVR'); runRule.main_process()"
+--CD D:\OneDrive\program\OSA_SUITE\AFM\scripts\afm & D: 
+CD C:\Ben\python\osa\AFM\scripts\afm
+python.exe -c "from ruleEngineMain import *; runRule = RuleEngineMain('113', '267', 'SVR'); runRule.main_process()"
+
+5	--done
+6	--done
+15	--done
+23	--done
+33	--done
+52	--error. rule 
+55	--error. duplicated
+110	--done
+112	--done
+113	--done
+
 
 6, 比较 QA和PRO上面的 ANL_FACT_ALERT 表的结果
-
-
-5
-6
-15
-23
-33
-52
-55
-110
-112
-113
 
 
 问题记录：
@@ -41,6 +42,7 @@ python.exe -c "from ruleEngineMain import *; runRule = RuleEngineMain('5', '267'
    新的 design 里面应该是UI去实现这块逻辑，所以表里面要手动去更新这些值
    ruleid: 13, 14, 16, 17, 18
    参考后面的sql
+4, 导数据的时候没有清掉olap_item_osm的数据，导致有重复记录 (item_key)
 
 
 ----preparing data for step 1,2------

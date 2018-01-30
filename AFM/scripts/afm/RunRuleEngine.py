@@ -75,6 +75,7 @@ class RunRuleEngine(object):
                   "                   ORDER BY created_date DESC) idx  " \
                   "			  FROM   ANL_RULE_ENGINE_RULE_SET " \
                   "          WHERE vendor_key = {VENDOR_KEY} AND retailer_key = {RETAILER_KEY}" \
+                  "          AND enabled IN ('T','Y') " \
                   "			) x WHERE idx = 1 " \
                   ") a " \
                   "INNER JOIN ANL_META_VR_OWNER_MAPPING b " \

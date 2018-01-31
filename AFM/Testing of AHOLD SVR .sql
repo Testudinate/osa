@@ -46,7 +46,16 @@ python.exe -c "from ruleEngineMain import *; runRule = RuleEngineMain('113', '26
    所以这里务必要保证，所有用到那4个表的地方都加上了之前同步脚本里面的逻辑，外加自己的逻辑
 6, 结果不大一致，主要是因为没有 sync anl_fact_feedback table
 7, 不要同时分析公用的表, 去掉相关的分析函数
-pyodbc.Error: ('55V04', '[55V04] ERROR 2083:  A Analyze Statistics operation is already in progress on projection OSA_AHOLD_BEN.ANL_DIM_FEEDBACK_ASSUMPTIONS_b0 [txnid 49539596868454305 session v_fusion_node0002-16732:0x20b3102]\n (2083) (SQLExecDirectW)')
+   pyodbc.Error: ('55V04', '[55V04] ERROR 2083:  A Analyze Statistics operation is already in progress on projection OSA_AHOLD_BEN.ANL_DIM_FEEDBACK_ASSUMPTIONS_b0 [txnid 49539596868454305 session v_fusion_node0002-16732:0x20b3102]\n (2083) (SQLExecDirectW)')
+8, 因为python是区分大小写的，所以下面的写法没法成立。
+   if _metrics_type == 'store-alertType filter': 改成
+   if _metrics_type.lower() == 'store-alertType filter'.lower(): 
+9, <Volume Limit>: ALERT_AHOLD_Ahold(AlertRank) NULLS FIRST for default. change this to NULLS LAST?
+10, ALERT SILO will apply filter "DSD = 0" but NOT for SVR silo.
+11, RSI_ALERT_TYPE: there is no RSI_ALERT_TYPE in SVR Silo. 
+11, ALERT_AHOLD_Ahold(Feedback). 确实这条 rule 导致有差异，但是rule本身的逻辑是没有问题的。 
+    我查了几个 alert_id 在 anl_fact_feedback 表和 anl_fact_afa_suffix 表。 都没有找到feedback, 但是pro上面是被feedback rejected掉了。比较奇怪
+
 ----preparing data for step 1,2------
 SELECT count(*) FROM ALT_UNILEVER_AHOLD.ANL_FACT_OSM_INCIDENTS WHERE period_key = 20180128;     --87202
 SELECT count(*) FROM ALT_PHARMAVITE_AHOLD.ANL_FACT_OSM_INCIDENTS WHERE period_key = 20180128;   --1631
@@ -94,6 +103,19 @@ vsql -U ben.wu -d fusion -h QAVERTICANXG.ENG.RSICORP.LOCAL -w Bat.Pit.Pan-444 -c
 vsql -U ben.wu -d fusion -h QAVERTICANXG.ENG.RSICORP.LOCAL -w Bat.Pit.Pan-444 -c "COPY OSA_AHOLD_BEN.ANL_FACT_OSM_INCIDENTS_import FROM local 'ALT_SC_JOHNSON_AHOLD.txt' skip 0 delimiter E'|' trailing nullcols rejectmax 1000 REJECTED DATA 'rej.log' EXCEPTIONS 'err.log' --enable-connection-load-balance DIRECT no escape;"
 vsql -U ben.wu -d fusion -h QAVERTICANXG.ENG.RSICORP.LOCAL -w Bat.Pit.Pan-444 -c "COPY OSA_AHOLD_BEN.ANL_FACT_OSM_INCIDENTS_import FROM local 'ALT_CAMPBELL_AHOLD.txt' skip 0 delimiter E'|' trailing nullcols rejectmax 1000 REJECTED DATA 'rej.log' EXCEPTIONS 'err.log' --enable-connection-load-balance DIRECT no escape;"
 vsql -U ben.wu -d fusion -h QAVERTICANXG.ENG.RSICORP.LOCAL -w Bat.Pit.Pan-444 -c "COPY OSA_AHOLD_BEN.ANL_FACT_OSM_INCIDENTS_import FROM local 'ALT_MAYBELLINE_AHOLD.txt' skip 0 delimiter E'|' trailing nullcols rejectmax 1000 REJECTED DATA 'rej.log' EXCEPTIONS 'err.log' --enable-connection-load-balance DIRECT no escape;"
+
+
+---------loading anl_fact_feedback-------
+--insert into osa_ahold_ben.anl_fact_feedback
+select -1 as EVENT_KEY, alert_fdbk.RETAILER_KEY, alert_fdbk.VENDOR_KEY, cast(STORE_VISITED_PERIOD_KEY::varchar as timestamp) as STORE_VISIT_DATE, 
+PERIOD_KEY, 'A' TYPE, NULL, ALERT_ID, NULL as ALERT_TYPE, NULL as MERCHANDISER_STORE_NUMBER, store.STORE_ID, NULL as MERCHANDISER_UPC, 
+item.UPC as INNER_UPC, 'Ahold' as MERCHANDISER, STORE_REP, NULL as SOURCE, NULL as BEGIN_STATUS, NULL as ACTION, FEEDBACK_DESCRIPTION , 
+NULL as FEEDBACK_HOTLINEREPORTDATE, NULL as FEEDBACK_ISININVENTORY, NULL as UPC_STATUS, NULL as MSI
+from osa_ahold_ben.anl_fact_feedback_alert alert_fdbk
+inner join osa_ahold_ben.olap_store store
+on alert_fdbk.store_key = store.store_key and alert_fdbk.RETAILER_KEY=store.RETAILER_KEY
+inner join osa_ahold_ben.olap_item_osm item
+on alert_fdbk.item_key = item.item_key and alert_fdbk.vendor_key=item.vendor_key
 
 
 -----------------------------------update rule parameters----------------------

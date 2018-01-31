@@ -16,7 +16,6 @@ class RunRuleEngineSpecialRule(object):
         self._suffix = "_" + context["SUFFIX"]
         self._afm_silo_type = self._context['SILO_TYPE']
         self._vendor_key = self._context["VENDOR_KEY"]
-        # self._hub_id = hub_id
         self._run_feedback = None
         self._remove_duplication = RemoveDuplication(self._dw_connection, self._context)
         self._get_sub_level_filter = GetSQLSubLevelFilter(self._dw_connection, self._app_connection, self._context)
@@ -88,6 +87,8 @@ class RunRuleEngineSpecialRule(object):
         # print(_provider_row, type(_provider_row))
         _provider_pk_column = _provider_row['PROVIDER_BASE_TABLE_PK_COLUMN']
 
+        # FIXME : There is no RSI_ALERT_TYPE in OLAP_STORE of SVR silo.
+        # temp solution: import data from Alert Silo for testing.
         if _metrics_type.lower() == 'store-alertType filter'.lower():
             sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
                   "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
@@ -95,11 +96,14 @@ class RunRuleEngineSpecialRule(object):
                   "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ a.vendor_key as vendor_key, " \
                   "       a.retailer_key as retailer_key, a.IncidentID as id " \
                   "FROM {schemaName}.ANL_RULE_ENGINE_STAGE_FACT_RULE_SET{suffix} a, " \
-                  "{schemaName}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION b " \
-                  "WHERE a.InterventionKey=b.InterventionKey AND COALESCE(a.RSI_ALERT_TYPE,0) & b.AlertIntegerType=0 " \
+                  "{schemaName}.ANL_DIM_OSM_INTERVENTIONCLASSIFICATION b, " \
+                  "{schemaName}.olap_store_import c " \
+                  "WHERE a.InterventionKey=b.InterventionKey AND a.store_key = c.store_key " \
+                  "AND COALESCE(c.RSI_ALERT_TYPE::int, 0) & b.AlertIntegerType=0 " \
                   "AND b.InterventionKey in ({interventionKeyList})".format(schemaName=self._schema_name,
                                                                             interventionKeyList=intervention_key_list,
                                                                             suffix=self._suffix)
+            print(sql)
             self._dw_connection.execute(sql)
             self._update_target.update_target_table(_metrics_reject_reason)
 
@@ -439,17 +443,16 @@ class RunRuleEngineSpecialRule(object):
             self._remove_duplication.remove_duplication()
             # $alreadyRemovedDuplication = $true
 
-        # rule_id = 32
-        # _parameter2 = 'STORE_KEY'
-        # _parameter3 = 'UPC'
-        # _metrics_type = 'Volume Limit'
+        # This is the last rule to get the top N Alerts if this rule enabled in UI
+        # If not enabled, get all alerts.
         if _metrics_type.lower() == 'Volume Limit'.lower():
-            # _filter_name = 'Number of Alerts/Store'
+            # print("filter name is: ", _filter_name)
             if _filter_name.lower() == 'Number of Alerts/Store'.lower():
                 sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_TEMP_FACT_3; " \
                       "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_TEMP_FACT_3 " \
                       "(sub_level VARCHAR(512), value INT) ON COMMIT PRESERVE ROWS"
                 self._dw_connection.execute(sql)
+                print("sub level metrics is:", _sub_level_metrics)
                 if _sub_level_metrics == '':
                     _temp_column = " 'default' AS sub_level, "
                     _sql_temp = "CASE WHEN idx> {parameter1} THEN 'reject for alert rank' ELSE '1' END " \
@@ -482,13 +485,15 @@ class RunRuleEngineSpecialRule(object):
                 print(sql)
                 self._dw_connection.execute(sql)
 
+                # Adding NULLS LAST here. Since the order_column can be NULL.
+                # NULLS first is default setting, which will cause rejecting data with high value
                 sql = "DROP TABLE IF EXISTS ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP; " \
                       "CREATE LOCAL TEMP TABLE ANL_RULE_ENGINE_STAGE_FACT_TARGET_RULE_SET_TEMP " \
                       "ON COMMIT PRESERVE ROWS AS " \
                       "SELECT /*+ label(GX_OSM_RULE_ENGINE)*/ retailer_key,vendor_key,id " \
                       "FROM (SELECT retailer_key,vendor_key,id,group_column,sub_level,idx ,{sqltemp} " \
                       "       FROM (SELECT *,ROW_NUMBER() OVER (PARTITION BY group_column,sub_level " \
-                      "                                         ORDER BY order_column DESC) idx " \
+                      "                                         ORDER BY order_column DESC NULLS LAST) idx " \
                       "              FROM ANL_RULE_ENGINE_TEMP_FACT_1) x " \
                       ")y WHERE \"RULE:{providerSubType} {filterName}\" <> '1';" \
                     .format(sqltemp=_sql_temp,
@@ -496,6 +501,7 @@ class RunRuleEngineSpecialRule(object):
                             filterName=_filter_name)
                 print(sql)
                 self._dw_connection.execute(sql)
+
                 self._update_target.update_target_table(_metrics_reject_reason)
 
         print("-------------- Calling RunRuleEngineSpecialRule class end--------------\n")
